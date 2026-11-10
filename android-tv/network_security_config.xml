@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 本機 HLS 代理（Rust 起的 http://hg.localhost:PORT）是明文 HTTP，
+     原生 ExoPlayer 走 okhttp，Android 9+ 預設擋明文，必須在這裡放行。
+     只放行本機位址，不對外開放。 -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">hg.localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

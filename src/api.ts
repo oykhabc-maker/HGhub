@@ -52,7 +52,14 @@ export const playlist = (url: string) => `${LOCAL}/hls?u=${encodeURIComponent(ur
 /* ── 调用封装 ───────────────────────────────────────────── */
 
 /** 写一行到应用数据目录 debug.log（用户反馈「打不开」时要的就是它） */
-export const logLine = (msg: string) => invoke("debug_log", { msg }).catch(() => {});
+export const logLine = (msg: string) => {
+  /* 電視盒（release 版）讀不到 app 私有目錄；原生端有掛 HGLog 時同步丟到 logcat */
+  try {
+    const bridge = (window as unknown as { HGLog?: { log: (m: string) => void } }).HGLog;
+    bridge?.log(msg);
+  } catch { /* ignore */ }
+  invoke("debug_log", { msg }).catch(() => {});
+};
 
 /** 网络类失败的样子：没有 HTTP 状态码，纯链路层（DNS / 连接 / 超时 / TLS） */
 const NET_FAIL = /dns|timed? ?out|timeout|connection|refused|reset|unreachable|broken pipe|tls|ssl|handshake|证书|网络|连接/i;

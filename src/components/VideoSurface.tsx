@@ -1,6 +1,8 @@
 import { useEffect, useImperativeHandle, useRef, forwardRef, useState } from "react";
 import Hls from "hls.js";
 import { isLocalMedia, logLine, platform, playlist } from "../api";
+import { NATIVE_MEDIA_ORIGIN, nativePlay, nativePlayerAvailable } from "../tv/bridge";
+import { tvOn } from "../tv/tvMode";
 import { mediaErrorMessage } from "../mediaErrors";
 import { mediaHost, mediaResource, observeHls, usePlayerDiagnostics } from "../playbackDiagnostics";
 import { usePlaybackActivity } from "../usePlaybackActivity";
@@ -95,6 +97,18 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
 
     const proxied = isLocalMedia(src);
     const url = proxied ? src : playlist(src);
+
+    /* Fire TV：Amazon WebView 的硬體解碼只出聲不出影（表面卡在 1 MB），
+       電視版改由原生 ExoPlayer 播放同一個 HLS 代理網址。 */
+    if (tvOn() && nativePlayerAvailable()) {
+      /* 原生播放器接不到 hg.localhost（Tauri 自定義協議），改走 loopback 代理 */
+      const nativeUrl = url.startsWith(NATIVE_MEDIA_ORIGIN) ? url : url.replace(/^https?:\/\/[^/]+/, NATIVE_MEDIA_ORIGIN);
+      logLine(`[play] native url=${nativeUrl.slice(0, 90)}`);
+      nativePlay(nativeUrl);
+      setReady(true);
+      return;
+    }
+
     const useHls = !url.includes("/seg?u=");
     trace("source.load", { engine: useHls && Hls.isSupported() ? "hls.js" : "native", auto_play: autoPlay, resource: mediaResource(src), host: mediaHost(src) });
 
@@ -242,6 +256,47 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
           if (v && !(v as unknown as { __audLogged?: boolean }).__audLogged) {
             (v as unknown as { __audLogged?: boolean }).__audLogged = true;
             logLine(`[aud] ${v.muted ? "muted" : "sound"} vol=${v.volume.toFixed(2)} paused=${v.paused}`);
+            /* 影像診斷：requestVideoFrameCallback 只在「真的拿到影像幀」時觸發。
+               0 幀 = 解碼/表面上游就斷了；有幀但畫面黑 = 合成/渲染層問題。 */
+            const vv = v as unknown as {
+              requestVideoFrameCallback?: (cb: () => void) => void;
+              videoWidth: number; videoHeight: number; readyState: number;
+              error: { code: number } | null;
+            };
+            if (typeof vv.requestVideoFrameCallback === "function") {
+              let n = 0;
+              const t0 = performance.now();
+              const tick = () => {
+                n += 1;
+                const sec = (performance.now() - t0) / 1000;
+                if (n === 1 || n === 30 || n === 90) {
+                  logLine(`[vf] frames=${n} at=${sec.toFixed(1)}s ${vv.videoWidth}x${vv.videoHeight} rs=${vv.readyState}`);
+                }
+                vv.requestVideoFrameCallback!(tick);
+              };
+              vv.requestVideoFrameCallback(tick);
+              setTimeout(() => {
+                if (n === 0) logLine(`[vf] NO-FRAMES-3s ${vv.videoWidth}x${vv.videoHeight} rs=${vv.readyState} err=${vv.error ? vv.error.code : 0}`);
+              }, 3000);
+            } else {
+              logLine("[vf] requestVideoFrameCallback unavailable");
+            }
+            /* 幀有進來但螢幕全黑時，要能回答「影片被誰蓋住 / 在哪裡」 */
+            setTimeout(() => {
+              try {
+                const r = v.getBoundingClientRect();
+                const cs = getComputedStyle(v);
+                const cx = r.left + r.width / 2;
+                const cy = r.top + r.height / 2;
+                const top = document.elementFromPoint(cx, cy) as HTMLElement | null;
+                logLine(
+                  `[vf] rect=${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)} op=${cs.opacity} vis=${cs.visibility} z=${cs.zIndex} paused=${v.paused} err=${vv.error ? vv.error.code : 0}`
+                );
+                logLine(
+                  `[vf] at-center=${top ? top.tagName + "." + String(top.className || "").slice(0, 70) : "none"}`
+                );
+              } catch { /* ignore */ }
+            }, 4000);
           }
           onPlaying?.();
         }

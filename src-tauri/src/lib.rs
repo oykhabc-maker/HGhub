@@ -1,6 +1,6 @@
 mod api;
 mod lines;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 mod linux_http;
 mod logging;
 #[cfg(target_os = "macos")]
@@ -65,7 +65,9 @@ pub fn run() {
             }
             // Linux 的 <video> 由 GStreamer 播放，它只认常规 HTTP scheme；
             // 这里起一个 loopback 代理，前端与 m3u8 改写都指向它（见 linux_http.rs）
-            #[cfg(target_os = "linux")]
+            // Linux 的 <video> 由 GStreamer 播放；Android 的電視版原生播放器（ExoPlayer）
+            // 也接不到 Tauri 的自定義協議，兩邊都需要一個真正的 loopback HTTP 代理。
+            #[cfg(any(target_os = "linux", target_os = "android"))]
             linux_http::start();
             // macOS 主窗口在此创建：先按系统红绿灯尺寸算出居中位置（见 macos_titlebar.rs）
             #[cfg(target_os = "macos")]

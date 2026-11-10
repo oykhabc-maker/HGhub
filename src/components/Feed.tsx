@@ -764,7 +764,15 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
               {isActive && playUrl ? (
                 <div className="absolute inset-0" style={{ touchAction: swipeEp ? "none" : "pan-y" }}
                   onPointerDown={onDown} onPointerMove={onMove} onPointerUp={(e) => onUp(false, e)} onPointerCancel={(e) => onUp(true, e)} onLostPointerCapture={(e) => onUp(true, e)}>
-                <div style={{ position: "absolute", inset: 0, transform: `translate3d(${zoom.x}px, ${zoom.y}px, 0) scale(${zoom.s})`, transformOrigin: "center center", transition: zoom.g ? "none" : "transform .18s ease-out" }}>
+                {/* zoom 為預設值時不要留 transform：translate3d 會把 video 提升成獨立合成層，
+                    Amazon WebView（Fire TV）在這一層會拿不到解碼後的影像幀 → 有聲無影。 */}
+                <div style={{
+                  position: "absolute", inset: 0,
+                  ...(zoom.x !== 0 || zoom.y !== 0 || zoom.s !== 1
+                    ? { transform: `translate3d(${zoom.x}px, ${zoom.y}px, 0) scale(${zoom.s})`, transformOrigin: "center center" }
+                    : null),
+                  transition: zoom.g ? "none" : "transform .18s ease-out",
+                }}>
                 <VideoSurface ref={videoRef} src={playUrl} poster={posterUrl} autoPlay active={active} muted={muted}
                   diagnosticContext={{ active, view: mode, kind, video_id: curId, episode: curEp }}
                   volume={volume} rate={effRate}
@@ -821,7 +829,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
 
               {/* 竖屏下的快捷操作：统一玻璃胶囊组，图标 + 短标签，细分隔线对齐 */}
               {isActive && !fs && !clean && !isDesktop && (landscapeVideo || zoom.s > 1.05 || episodes.length > 1) && (
-                <div className="absolute left-1/2 -translate-x-1/2 z-20" style={{ top: "64%" }}>
+                <div className="absolute left-1/2 -translate-x-1/2 z-20" data-tv-hide="1" style={{ top: "64%" }}>
                   <div className="flex items-center gap-0.5 h-8 px-1 rounded-full backdrop-blur-xl elev-2"
                     style={{ background: "rgba(12,15,22,.58)", boxShadow: "inset 0 0 0 1px rgba(255,255,255,.09)" }}>
                     {episodes.length > 1 && (

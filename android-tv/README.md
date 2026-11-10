@@ -39,3 +39,15 @@ pnpm tauri android build --target aarch64 --target armv7 --apk
 
 - `release` APK 是 **unsigned**，需自己 `zipalign -f 4` + `apksigner sign`，否則裝不上。
 - `versionCode` 在 `src-tauri/tauri.conf.json` 的 `bundle.android.versionCode`。
+
+## 檔案
+
+| 檔案 | 用途 |
+| --- | --- |
+| `MainActivity.kt` | DPAD → JS 橋接（`window.__tvKey`）、`mediaPlaybackRequiresUserGesture=false`、`HGPlayer`/`HGLog` JS 介面 |
+| `PlayerActivity.kt` | 電視版原生播放器（Media3 / ExoPlayer），繞過 Amazon WebView 的硬體解碼缺陷 |
+| `network_security_config.xml` | 只放行 `localhost` / `127.0.0.1` 的明文（原生播放器要讀 loopback HLS 代理） |
+| `tv_banner.png` | 電視桌面 banner（320×180） |
+| `apply.mjs` | 把上述檔案與 Manifest / Gradle 改動套回 `gen/android`（可重複執行） |
+
+注意：`gen/android` 被 `.gitignore` 忽略，**每次 `tauri android init` 之後都要重跑 `apply.mjs`**。

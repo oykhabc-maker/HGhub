@@ -86,3 +86,33 @@ pnpm tauri android build --target aarch64 --target armv7 --apk   # 交付（通�
   新增的 `src/tv/` 不會衝突。
 - 授權是 PolyForm Noncommercial 1.0.0：自用/修改可以，不得商業化散布。
 - 播放源與接口都由上游維護；上游若改接口，這個 fork 只跟上游同步即可。
+
+## 原生播放器（Fire TV 有聲無影的解方）
+
+**症狀**：Fire TV Stick 4K Max（Fire OS 9 / Amazon WebView 138）播放時有聲音、沒有畫面。
+
+**證據**（`adb logcat`）：
+```
+create MediaCodec video decoder, mime video/avc, decoder name OMX.MTK.VIDEO.DECODER.AVC
+E/ACodec: failed to set min buffer size to 6220800 (is still 1048576)
+W/chromium: Video renderer video frame queue is empty → TransitionToHaveNothing
+```
+用 `requestVideoFrameCallback` 探針確認：**影像幀其實有解出來**（4 秒 90 幀、1280x720、readyState=4、
+圖層可見且沒被任何元素蓋住），但 AWV 把解碼表面卡在 1 MB，送不上螢幕。
+同一份程式碼在 Android TV 模擬器（x86_64）與 Google TV Streamer 上畫面正常，
+所以這是 Amazon WebView 的硬體解碼缺陷，不是應用層程式碼問題。
+
+**做法**：電視版新增 `PlayerActivity`（Media3 / ExoPlayer），播放時改走系統解碼路徑：
+
+- 前端在 `VideoSurface` 偵測 `nativePlayerAvailable()`（UA 含 `AmazonWebView` / `AFT….`）後，
+  不再自己 attach hls.js，而是呼叫 `window.HGPlayer.play(url)`。
+- 網址沿用 Rust 的 loopback HLS 代理 `http://127.0.0.1:17650/hls?u=…`
+  （`src-tauri/src/linux_http.rs` 原本只給 Linux 用，Android 也一起啟用）——
+  Tauri 的自定義協議 `hg.localhost` 只有 WebView 認得，原生播放器拿不到。
+- `AndroidManifest.xml` 需要 `networkSecurityConfig` 放行 `localhost/127.0.0.1` 的明文
+  （Android 9+ 預設擋，ExoPlayer 會報 `Cleartext HTTP traffic … not permitted`）。
+- 遙控器：OK 叫出控制列、左右 ±10 秒、播放/暫停鍵切換、返回先收控制列再按一次離開。
+  離開後 `MainActivity.onResume` 會叫前端模擬一次 `Escape`，回到原本那一頁。
+
+**v1 限制**：原生播放器只播當前這一集；切集仍回 App 用上下鍵選。
+要在播放器內切集，需要把整季的播放網址一起傳給原生端（多幾十個 API 請求），下一版再做。

@@ -617,3 +617,6 @@ html.tv-mode .text-\[24px\]    { font-size: 30px; }
 html.tv-mode .w-\[104px\] { width: 148px; }
 html.tv-mode .w-\[52px\]  { width: 64px; }
 html.tv-mode .h-\[68px\]  { height: 84px; }
+
+/* 手機專用的浮動膠囊（切集/铺满/横屏）：電視上會壓在畫面中央，直接隱藏 */
+html.tv-mode [data-tv-hide] { display: none !important; }

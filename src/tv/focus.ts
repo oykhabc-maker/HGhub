@@ -96,9 +96,16 @@ function describe(el: HTMLElement): string {
   return `x=${Math.round(r.left)} y=${Math.round(r.top)} w=${Math.round(r.width)} h=${Math.round(r.height)} "${label}"`;
 }
 
+let lastKey = "";
+
+function keyOf(el: HTMLElement): string {
+  return (el.getAttribute("aria-label") || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40);
+}
+
 export function focusEl(el: HTMLElement, scroll = true) {
   if (lastFocused && lastFocused !== el) lastFocused.classList.remove("tv-focus");
   lastFocused = el;
+  lastKey = keyOf(el);
   el.classList.add("tv-focus");
   try { el.focus({ preventScroll: true }); } catch { /* ignore */ }
   if (scroll) {
@@ -126,6 +133,24 @@ export function focusFirst(root?: ParentNode): boolean {
     if (r.top < br.top - 8 || (Math.abs(r.top - br.top) <= 8 && r.left < br.left)) best = el;
   }
   focusEl(best);
+  return true;
+}
+
+/**
+ * 瀑布流 / 横向列表重繪時，原本那個節點會被 React 換掉，
+ * `.tv-focus` 跟著消失 —— 遙控器看起來就是「高亮框移動一下就整個不見」。
+ * 這裡用焦點文字當識別，把高亮框接回同一個邏輯元素。
+ */
+export function reanchor(): boolean {
+  if (lastFocused && lastFocused.isConnected && lastFocused.classList.contains("tv-focus")) return true;
+  if (!lastKey) return false;
+  const hit = tvCandidates(document).find((el) => {
+    if (keyOf(el) !== lastKey) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  });
+  if (!hit) return false;
+  focusEl(hit, true);
   return true;
 }
 

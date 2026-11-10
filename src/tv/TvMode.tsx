@@ -3,7 +3,7 @@ import { useStore } from "../store";
 import { logLine } from "../api";
 import { installRemoteBridge } from "./bridge";
 import { armRemoteWatcher, initTvMode, setTvMode, subscribeTv, tvOn } from "./tvMode";
-import { blurFocus, focusFirst, focusIsAlive, installFocusEngine, playerActive } from "./focus";
+import { blurFocus, focusFirst, focusIsAlive, installFocusEngine, playerActive, reanchor } from "./focus";
 
 /** 掛在 App 裡一次：電視模式開關、焦點引擎、換頁後的焦點歸位、預設分頁 */
 export default function TvMode() {
@@ -54,6 +54,27 @@ export default function TvMode() {
     const id = window.setTimeout(tick, 140);
     return () => window.clearTimeout(id);
   }, [on, tab, stack.length, loginOpen]);
+
+  useEffect(() => {
+    if (!on) return undefined;
+    if (playerActive()) return undefined;
+    const el = document.querySelector<HTMLElement>("[data-tv-page]");
+    if (el) { el.scrollTop = 0; }
+    document.scrollingElement?.scrollTo({ top: 0 });
+  }, [on, tab, stack.length]);
+
+  useEffect(() => {
+    if (!on) return undefined;
+    /* 看門狗：React 重繪把節點換掉時高亮框會消失，這裡每 700ms 補回去。
+       播放中不動，避免打斷播放器自己的焦點（進度條/面板）。 */
+    const id = window.setInterval(() => {
+      if (playerActive()) return;
+      if (document.querySelector(".tv-focus")) return;
+      if (reanchor()) return;
+      focusFirst();
+    }, 700);
+    return () => window.clearInterval(id);
+  }, [on]);
 
   useEffect(() => {
     if (!on) return undefined;
