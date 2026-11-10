@@ -2,21 +2,62 @@ package com.hghub.huangguo
 
 import android.os.Bundle
 import android.view.KeyEvent
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
 
 class MainActivity : TauriActivity() {
   private var web: WebView? = null
+  private var nativePlaybackActive = false
 
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
   }
 
+
+  override fun onResume() {
+    super.onResume()
+    /* 原生播放器關掉後回到 WebView：等同按一次返回鍵，回到上一層 */
+    if (nativePlaybackActive) {
+      nativePlaybackActive = false
+      web?.evaluateJavascript(
+        "window.__hgNativeClosed && window.__hgNativeClosed()",
+        null
+      )
+    }
+  }
+
   override fun onWebViewCreate(webView: WebView) {
     web = webView
     // 电视上视频由遥控器触发播放，不该被 Chromium 的自动播放策略静音
     webView.settings.mediaPlaybackRequiresUserGesture = false
+    // release 版不能 run-as 讀 app 私有目錄，前端日誌同時丟到 logcat（tag=HGTV）
+    webView.addJavascriptInterface(object {
+      @JavascriptInterface
+      fun log(msg: String) {
+        android.util.Log.i("HGTV", msg)
+      }
+    }, "HGLog")
+    // 電視版原生播放器：JS 給播放網址，原生 Activity 用 ExoPlayer 播
+    webView.addJavascriptInterface(object {
+      @JavascriptInterface
+      fun play(url: String) {
+        runOnUiThread {
+          nativePlaybackActive = true
+          startActivity(
+            android.content.Intent(this@MainActivity, PlayerActivity::class.java)
+              .putExtra("url", url)
+          )
+        }
+      }
+      @JavascriptInterface
+      fun load(url: String, label: String?) {
+        runOnUiThread { PlayerActivity.current?.loadUrl(url, label) }
+      }
+    }, "HGPlayer")
+    /* 原生播放器 → 前端：切集、之後的其他互動都走這裡 */
+    TvBridge.send = { js -> runOnUiThread { webView.evaluateJavascript(js, null) } }
   }
 
   /**
@@ -37,5 +78,12 @@ class MainActivity : TauriActivity() {
       return true
     }
     return super.dispatchKeyEvent(event)
+  }
+
+
+  object TvBridge {
+    /** MainActivity 建立 WebView 後填入；PlayerActivity 用它呼叫前端 */
+    @Volatile
+    var send: ((String) -> Unit)? = null
   }
 }

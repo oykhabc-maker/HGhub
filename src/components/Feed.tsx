@@ -9,6 +9,7 @@ import PlayerControls from "./PlayerControls";
 import PlaybackLock from "./PlaybackLock";
 import { ArticlePanel, CommentsPanel, EpisodesPanel } from "./Panels";
 import { setBackHandler } from "../back";
+import { setNativeLabel } from "../tv/bridge";
 import { tracePlayback } from "../playbackDiagnostics";
 import {
   IBack, IBoltF, IChevR, IChevronDown, IChevronUp, IClose, ICommentF, ICompress, IExpand, IFileText, IHeart, IHeartF,
@@ -249,6 +250,20 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
     }
     go(dir);
   }, [swipeEp, kind, epMap, curId, episodes.length, go]);
+
+  /* 原生播放器（Fire TV）的上下鍵：由前端算下一集，原生端只負責回報按鍵 */
+  useEffect(() => {
+    const w = window as unknown as { __hgEpStep?: (dir: number) => void };
+    w.__hgEpStep = (dir: number) => {
+      logLine(`[ep] native step dir=${dir} cur=${curEp}/${episodes.length}`);
+      stepDir(dir > 0 ? 1 : -1);
+    };
+    return () => { delete w.__hgEpStep; };
+  }, [stepDir, curEp, episodes.length]);
+
+  useEffect(() => {
+    setNativeLabel(`第 ${curEp} 集${episodes.length ? ` / ${episodes.length}` : ""}`);
+  }, [curEp, episodes.length]);
 
   const canStep = (dir: number) => {
     if (swipeEp && kind === "video") {

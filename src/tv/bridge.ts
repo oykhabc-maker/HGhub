@@ -28,7 +28,7 @@ export function installRemoteBridge() {
 }
 
 
-type NativePlayer = { play: (url: string) => void };
+type NativePlayer = { play: (url: string) => void; load?: (url: string, label?: string) => void };
 
 /** 原生播放器（ExoPlayer）是否可用：Fire TV 的 Amazon WebView 解不出畫面時走這條 */
 export function nativePlayerAvailable(): boolean {
@@ -44,11 +44,24 @@ export function nativePlayerAvailable(): boolean {
  *  電視版原生播放器只認真的 http://，Tauri 自定義協議它拿不到。 */
 export const NATIVE_MEDIA_ORIGIN = "http://127.0.0.1:17650";
 
-export function nativePlay(url: string): boolean {
+/** 原生播放器是否已經開著（開著就一直用 load 原地換集，不要疊第二個 Activity） */
+let launched = false;
+let epLabel = "";
+
+/** 播放器上要顯示的集數標籤（原生播放器用 Toast 顯示） */
+export function setNativeLabel(label: string) {
+  epLabel = label;
+}
+
+export function nativePlayUrl(url: string): boolean {
   const b = (window as unknown as { HGPlayer?: NativePlayer }).HGPlayer;
-  if (!b || typeof b.play !== "function") return false;
+  if (!b) return false;
   try {
-    b.play(url);
+    if (launched && typeof b.load === "function") b.load(url, epLabel);
+    else {
+      b.play(url);
+      launched = true;
+    }
     return true;
   } catch {
     return false;
@@ -57,5 +70,9 @@ export function nativePlay(url: string): boolean {
 
 /* 原生播放器關閉後（MainActivity.onResume）回到 WebView：等同按一次返回鍵 */
 (window as unknown as { __hgNativeClosed?: () => void }).__hgNativeClosed = () => {
+  launched = false;
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 };
+
+/** @deprecated 用 nativePlayUrl（會判斷是否已在播放中） */
+export const nativePlay = nativePlayUrl;

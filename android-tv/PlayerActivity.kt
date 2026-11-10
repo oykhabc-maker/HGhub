@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -27,6 +28,7 @@ import androidx.media3.ui.PlayerView
  */
 class PlayerActivity : Activity() {
   private var player: ExoPlayer? = null
+  private var dataSource: DefaultHttpDataSource.Factory? = null
   private var playerView: PlayerView? = null
   private var ended = false
 
@@ -55,6 +57,7 @@ class PlayerActivity : Activity() {
       .setConnectTimeoutMs(15000)
       .setReadTimeoutMs(20000)
       .setAllowCrossProtocolRedirects(true)
+    this.dataSource = dataSource
 
     val exo = ExoPlayer.Builder(this).build()
     player = exo
@@ -68,6 +71,43 @@ class PlayerActivity : Activity() {
     exo.prepare()
     exo.playWhenReady = true
     ended = false
+    current = this
+  }
+
+  /** 由 JS 端呼叫：原地換集，不再新開 Activity */
+  fun loadUrl(url: String, label: String?) {
+    val exo = player ?: return
+    val ds = dataSource ?: return
+    /* 一定要用 HlsMediaSource 明確指定型別：代理網址是 /hls?u=…（沒有 .m3u8 副檔名），
+       交給預設的 ProgressiveMediaSource 會報「None of the available extractors could read the stream」。 */
+    exo.setMediaSource(
+      HlsMediaSource.Factory(ds).createMediaSource(MediaItem.fromUri(Uri.parse(url)))
+    )
+    exo.prepare()
+    exo.playWhenReady = true
+    if (!label.isNullOrBlank()) {
+      Toast.makeText(this, label, Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  /**
+   * 上下鍵要在 dispatchKeyEvent 攔：PlayerView 有自己的焦點導航，
+   * onKeyDown 根本收不到方向鍵（實測按了完全沒反應）。
+   */
+  override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+      when (event.keyCode) {
+        KeyEvent.KEYCODE_DPAD_UP -> {
+          MainActivity.TvBridge.send?.invoke("window.__hgEpStep && window.__hgEpStep(-1)")
+          return true
+        }
+        KeyEvent.KEYCODE_DPAD_DOWN -> {
+          MainActivity.TvBridge.send?.invoke("window.__hgEpStep && window.__hgEpStep(1)")
+          return true
+        }
+      }
+    }
+    return super.dispatchKeyEvent(event)
   }
 
   override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -108,9 +148,16 @@ class PlayerActivity : Activity() {
 
   override fun onDestroy() {
     ended = true
+    if (current === this) current = null
     playerView?.player = null
     player?.release()
     player = null
     super.onDestroy()
+  }
+
+  companion object {
+    /** 供 MainActivity 的 HGPlayer.load() 取得目前播放中的實例 */
+    @Volatile
+    var current: PlayerActivity? = null
   }
 }

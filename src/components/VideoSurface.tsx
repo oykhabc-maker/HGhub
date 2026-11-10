@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, useRef, forwardRef, useState } from "react";
 import Hls from "hls.js";
 import { isLocalMedia, logLine, platform, playlist } from "../api";
-import { NATIVE_MEDIA_ORIGIN, nativePlay, nativePlayerAvailable } from "../tv/bridge";
+import { NATIVE_MEDIA_ORIGIN, nativePlayUrl, nativePlayerAvailable } from "../tv/bridge";
 import { tvOn } from "../tv/tvMode";
 import { mediaErrorMessage } from "../mediaErrors";
 import { mediaHost, mediaResource, observeHls, usePlayerDiagnostics } from "../playbackDiagnostics";
@@ -104,7 +104,7 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
       /* 原生播放器接不到 hg.localhost（Tauri 自定義協議），改走 loopback 代理 */
       const nativeUrl = url.startsWith(NATIVE_MEDIA_ORIGIN) ? url : url.replace(/^https?:\/\/[^/]+/, NATIVE_MEDIA_ORIGIN);
       logLine(`[play] native url=${nativeUrl.slice(0, 90)}`);
-      nativePlay(nativeUrl);
+      nativePlayUrl(nativeUrl);
       setReady(true);
       return;
     }
