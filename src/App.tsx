@@ -212,7 +212,7 @@ function ShellInner({ collapsed, theater }: { collapsed: boolean; theater: boole
         <div className={vis("category")}><Category wide={wide} active={pageActive && tab === "category"} /></div>
         <div className={vis("profile")}><Profile wide={wide} /></div>
         {stack.map((p, i) => (
-          <div key={p.key} className="absolute inset-0 z-30 bg-bg win-page-in" style={{ boxShadow: "-18px 0 40px rgba(0,0,0,.5)" }}>
+          <div key={p.key} data-tv-page="1" className="absolute inset-0 z-30 bg-bg win-page-in" style={{ boxShadow: "-18px 0 40px rgba(0,0,0,.5)" }}>
             <StackPage page={p} onBack={pop} wide={wide} top={i === stack.length - 1} bottomInset={14} />
           </div>
         ))}

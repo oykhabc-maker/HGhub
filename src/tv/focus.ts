@@ -46,6 +46,20 @@ function visible(el: HTMLElement): boolean {
   return true;
 }
 
+/**
+ * 候選範圍：彈層 > 最上層堆疊頁 > 整份文件。
+ * 堆疊頁（分類 / 排行榜…）是「蓋在原本那頁之上」的 z-30 容器，下面那頁沒有被
+ * display:none / visibility:hidden，所以整份文件一起找的話，焦點會跑到背後那頁
+ * ——遙控器看起來就是「往下按一下，高亮框就不見了」（框其實在下面那頁的 banner 上）。
+ */
+export function activeScope(): ParentNode {
+  const overlay = document.querySelector<HTMLElement>("[data-tv-overlay]");
+  if (overlay) return overlay;
+  const pages = document.querySelectorAll<HTMLElement>("[data-tv-page]");
+  if (pages.length) return pages[pages.length - 1];
+  return document;
+}
+
 export function tvCandidates(root: ParentNode): HTMLElement[] {
   const out: HTMLElement[] = [];
   root.querySelectorAll<HTMLElement>(SEL).forEach((el) => {
@@ -67,13 +81,22 @@ function nearest(cur: HTMLElement, dir: Dir, list: HTMLElement[]): HTMLElement |
     if (el === cur || cur.contains(el) || el.contains(cur)) continue;
     if (el === cur.parentElement) continue;
     const r = el.getBoundingClientRect();
+    /* 垂直移動時，整塊在畫面左右之外的（橫向列的離屏卡片）不要選：
+       scrollIntoView 對 transform 輪播沒用，選到就是「框跑到看不見的地方」。 */
+    if (vertical && (r.right <= 0 || r.left >= window.innerWidth)) continue;
     const dx = r.left + r.width / 2 - cx;
     const dy = r.top + r.height / 2 - cy;
     const primary = vertical ? dy : dx;
-    if (dir === "down" && primary <= 2) continue;
-    if (dir === "up" && primary >= -2) continue;
-    if (dir === "right" && primary <= 2) continue;
-    if (dir === "left" && primary >= -2) continue;
+    /* 最小間距：網格裡左右兩欄常差幾像素，用固定 2px 判斷會把「隔壁欄同一列」
+       當成「下面那一個」（往下按卻往右跑）。改成跟元素尺寸成比例。 */
+    const gap = Math.max(6, Math.round(0.35 * Math.min(
+      vertical ? c.height : c.width,
+      vertical ? r.height : r.width,
+    )));
+    if (dir === "down" && primary <= gap) continue;
+    if (dir === "up" && primary >= -gap) continue;
+    if (dir === "right" && primary <= gap) continue;
+    if (dir === "left" && primary >= -gap) continue;
 
     /* 垂直移動時看水平重疊、水平移動時看垂直重疊：
        重疊的候選（同一欄 / 同一列）優先，否則依偏移量加重懲罰。 */
@@ -117,7 +140,7 @@ export function focusEl(el: HTMLElement, scroll = true) {
 
 /** 把焦點放到畫面上第一個合理的元素（分頁切換、載入完成後呼叫） */
 export function focusFirst(root?: ParentNode): boolean {
-  const scope: ParentNode = root || (document.querySelector<HTMLElement>("[data-tv-overlay]") || document);
+  const scope: ParentNode = root || activeScope();
   const all = tvCandidates(scope);
   if (!all.length) return false;
   /* 文字框放最後：電視上沒有輸入法，先把焦點給可點的內容，
@@ -144,7 +167,7 @@ export function focusFirst(root?: ParentNode): boolean {
 export function reanchor(): boolean {
   if (lastFocused && lastFocused.isConnected && lastFocused.classList.contains("tv-focus")) return true;
   if (!lastKey) return false;
-  const hit = tvCandidates(document).find((el) => {
+  const hit = tvCandidates(activeScope()).find((el) => {
     if (keyOf(el) !== lastKey) return false;
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
@@ -210,7 +233,7 @@ function onKeyDown(e: KeyboardEvent) {
   if (!dir) return;
   if (typing && (dir === "left" || dir === "right")) return; // 輸入框內移動游標
 
-  const scope: ParentNode = overlay || document;
+  const scope: ParentNode = overlay || activeScope();
   const list = tvCandidates(scope);
   if (!list.length) return;
 
