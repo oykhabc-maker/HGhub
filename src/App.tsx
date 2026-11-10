@@ -17,6 +17,8 @@ import { DesktopRail, DesktopTitleBar } from "./components/DesktopChrome";
 import ResizeHandles from "./components/ResizeHandles";
 import { tracePlayback } from "./playbackDiagnostics";
 import { IGrid, IGridF, IHome, IHomeF, ISearch, IUser, IUserF, Logo } from "./icons";
+import TvMode, { useTvMode } from "./tv/TvMode";
+import { tvOn } from "./tv/tvMode";
 
 /* ============ 底部标签栏（Android）—— 细瘦纯文字、低侵入 ============ */
 function TabBar() {
@@ -88,6 +90,7 @@ function StackPage({ page, onBack, wide, top, bottomInset }: {
 /* ============ 应用主体 ============ */
 function AppBody() {
   const { platform, tab, setTab, stack, pop, loginOpen, setLoginOpen, fs, clean } = useStore();
+  const tv = useTvMode();
   const mainRef = useRef<HTMLDivElement>(null);
   const [wide, setWide] = useState(!isMobile);
   const [collapsed, setCollapsed] = useState(false);
@@ -122,7 +125,7 @@ function AppBody() {
 
   const vis = (k: Tab) => (tab === k ? "absolute inset-0" : "absolute inset-0 invisible pointer-events-none");
   const pageActive = stack.length === 0 && !loginOpen;
-  const bottomInset = isMobile ? (fs || clean ? 0 : 40) : 14;
+  const bottomInset = isMobile ? (fs || clean ? 0 : (tv ? 68 : 40)) : 14;
   /* 栈页（从搜索/分类/我的进入的播放页、图文页）没有底栏，
      底部只让出安全区。之前多留了 20px，视频底边会露出一条
      「底栏」似的窄缝（底部的压暗渐变到不了屏幕最底）。 */
@@ -138,7 +141,7 @@ function AppBody() {
         <div className={vis("profile")}><Profile wide={wide} /></div>
 
         {stack.map((p, i) => (
-          <div key={p.key} className="absolute inset-0 z-30 bg-bg a-page-in" style={{ boxShadow: "-18px 0 40px rgba(0,0,0,.5)" }}>
+          <div key={p.key} data-tv-page="1" className="absolute inset-0 z-30 bg-bg a-page-in" style={{ boxShadow: "-18px 0 40px rgba(0,0,0,.5)" }}>
             <StackPage page={p} onBack={pop} wide={wide} top={i === stack.length - 1} bottomInset={stackInset} />
           </div>
         ))}
@@ -232,7 +235,7 @@ function MobileShell() {
 
 /* ============ 入口 ============ */
 export default function App() {
-  const { platform, loginOpen, setLoginOpen, tab, setTab, stack, pop, fs, setFs } = useStore();
+  const { platform, loginOpen, setLoginOpen, tab, setTab, stack, pop, fs, setFs, toast } = useStore();
   useEffect(() => {
     tracePlayback("navigation.change", { tab, stack: stack.map(p => ({ page: p.kind, key: p.key })), login_open: loginOpen });
   }, [tab, stack, loginOpen]);
@@ -241,12 +244,27 @@ export default function App() {
      层级：全屏 → 面板/弹层 → 登录框 → 页面栈 → 回首页 → 退出应用。
      不注册这个监听，Tauri 会直接 webView.goBack() 或退出，表现就是「任意页面返回都回桌面」。 */
   const backRef = useRef<() => void>(() => {});
+  /* 電視模式的「再按一次退出」計時 */
+  const exitArmRef = useRef(0);
   backRef.current = () => {
     if (fs) { setFs(false); return; }                        // 沉浸全屏
     if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
     if (runBack()) return;                                  // 播放器的选集/评论/图文面板
     if (loginOpen) { setLoginOpen(false); return; }
     if (stack.length) { pop(); return; }
+    if (tvOn()) {
+      /* 電視：播放器（首頁）按返回 → 回「分類」挑片；分類是根頁，
+         再按兩次才退出，避免手滑一次就掉回桌面。 */
+      if (tab !== "category") { setTab("category"); return; }
+      const now = Date.now();
+      if (now - exitArmRef.current < 2500) {
+        invoke("plugin:app|exit", { code: 0 }).catch(() => {});
+      } else {
+        exitArmRef.current = now;
+        toast("再按一次返回鍵退出", "info");
+      }
+      return;
+    }
     if (tab !== "home") { setTab("home"); return; }
     invoke("plugin:app|exit", { code: 0 }).catch(() => {});
   };
@@ -281,6 +299,7 @@ export default function App() {
   return (
     <>
       {isMobile ? <MobileShell /> : <DesktopShell />}
+      <TvMode />
       <LoginModal />
       <ToastHost />
       {/* 登录遮罩键盘处理占位 */}

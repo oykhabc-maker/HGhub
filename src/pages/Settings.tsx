@@ -5,6 +5,8 @@ import { Modal, Toggle } from "../components/ui";
 import LinePicker from "../components/LinePicker";
 import { autoLineEnabled, pickLine, setAutoLine } from "../autoLine";
 import { copyPlaybackLog, initPlaybackLog, setPlaybackLog, tracePlayback, usePlaybackLog } from "../playbackDiagnostics";
+import { useTvMode } from "../tv/TvMode";
+import { setTvMode } from "../tv/tvMode";
 import { IBack, IBoltF, IBroom, IChevR, IHeart, IInfo, ILink, ILockF, IMoon, IRefresh, ISettings, ISun, IVolMute, IList } from "../icons";
 
 /* 独立设置页：线路 / 外观 / 播放 / 本地数据 / 清理缓存 / 网络诊断 / 关于
@@ -22,6 +24,7 @@ export default function Settings({ onBack, wide }: { onBack: () => void; wide: b
   /** 应用内更新进行到哪一步（空串=没在更新） */
   const [updating, setUpdating] = useState("");
   const playbackLog = usePlaybackLog();
+  const tv = useTvMode();
   const [copyingLog, setCopyingLog] = useState(false);
 
   const readLine = () => {
@@ -96,6 +99,17 @@ export default function Settings({ onBack, wide }: { onBack: () => void; wide: b
                 <div className="text-[10.5px] text-mut">跟随设计稿的 Fluent 深色</div>
               </div>
               <Toggle on={theme === "dark"} onChange={(on) => setTheme(on ? "dark" : "light")} label="深色外观" />
+            </div>
+          </Section>
+
+          <Section title="电视模式（遥控器）">
+            <div className="flex items-center gap-3 px-3.5 py-3">
+              <span className="w-8 h-8 rounded-full bg-s3 flex items-center justify-center text-primary"><IList size={16} /></span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12.5px] text-on">遥控器焦点导航</div>
+                <div className="text-[10.5px] text-mut">方向键移动焦点、OK 确定、返回键回上一层。电视盒会自动开启。</div>
+              </div>
+              <Toggle on={tv} onChange={(on) => setTvMode(on)} label="遥控器焦点导航" />
             </div>
           </Section>
 

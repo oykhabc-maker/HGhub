@@ -43,7 +43,7 @@
     ],
     "android": {
       "minSdkVersion": 24,
-      "versionCode": 1002014
+      "versionCode": 1201401
     }
   }
 }

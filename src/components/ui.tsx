@@ -29,7 +29,7 @@ export function Sheet({ open, onClose, children, z = "z-40" }: { open: boolean; 
   }, [open]);
   if (!render) return null;
   return (
-    <div className={`absolute inset-0 ${z}`}>
+    <div className={`absolute inset-0 ${z}`} data-tv-overlay={open ? "1" : undefined}>
       <div className={`absolute inset-0 ${open ? "a-fade" : "opacity-0 transition-opacity duration-200"}`}
         style={{ background: "rgba(0,0,0,.55)" }} onClick={onClose} />
       <div className={`absolute bottom-0 inset-x-0 bg-s2 elev-3 overflow-hidden ${open ? "a-sheet" : "a-sheet-out"}`}
@@ -50,7 +50,7 @@ export function Modal({ open, onClose, children, width = 340 }: { open: boolean;
   }, [open]);
   if (!render) return null;
   return (
-    <div className="absolute inset-0 z-[55] flex items-center justify-center p-6">
+    <div className="absolute inset-0 z-[55] flex items-center justify-center p-6" data-tv-overlay={open ? "1" : undefined}>
       <div className={`absolute inset-0 bg-black/65 backdrop-blur-sm ${open ? "a-fade" : "opacity-0 transition-opacity"}`} onClick={onClose} />
       <div className={`relative bg-s3 rounded-(--r-lg) elev-3 ${open ? "a-scale-in" : "opacity-0 scale-90 transition-all"}`} style={{ width, maxWidth: "100%" }}>
         {children}

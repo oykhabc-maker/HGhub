@@ -382,6 +382,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
         case "ArrowDown": e.preventDefault(); stepDir(1); break;
         case "ArrowUp": e.preventDefault(); stepDir(-1); break;
         case " ": e.preventDefault(); videoRef.current?.toggle(); break;
+        case "Enter": e.preventDefault(); videoRef.current?.toggle(); break;
         case "ArrowLeft": e.preventDefault(); videoRef.current?.seek(Math.max(0, time - 5), "keyboard_shortcut"); break;
         case "ArrowRight": e.preventDefault(); videoRef.current?.seek(time + 5, "keyboard_shortcut"); break;
         case "f": case "F": toggleFull(); break;
@@ -744,6 +745,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
 
   return (
     <div
+      data-tv-playing={active && !panel ? "1" : undefined}
       className={`hg-player-ui absolute inset-0 overflow-hidden bg-black player-root ${controlsLocked ? "is-locked" : ""} ${isDesktop ? "player-surface" : ""} ${theater ? "is-theater" : ""} ${rotated ? "fs-landscape" : ""} ${isDesktop && idle ? "is-idle" : ""}`}
       onPointerMove={() => { if (isDesktop) wake(); }}>
       <div className="absolute inset-0" inert={controlsLocked}>
