@@ -35,7 +35,7 @@ function TabBar() {
   const overVideo = tab === "home";
   const lightBar = !overVideo && theme === "light";
   return (
-    <nav className="hg-tabbar absolute bottom-0 inset-x-0 z-30"
+    <nav data-tv-nav="1" className="hg-tabbar absolute bottom-0 inset-x-0 z-30"
       style={{
         paddingBottom: "var(--sab, 0px)",
         background: lightBar ? "rgba(250, 250, 250, .97)" : overVideo ? "#000000" : "#141414",

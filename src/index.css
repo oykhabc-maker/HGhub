@@ -590,7 +590,7 @@ html.tv-mode button:focus:not(.tv-focus),
 html.tv-mode [tabindex]:focus:not(.tv-focus) { outline: none !important; }
 
 /* 焦點移到底部時留出底欄高度，不被遮住 */
-html.tv-mode .scroll-y { scroll-padding-bottom: 96px; }
+html.tv-mode .scroll-y { scroll-padding-bottom: 96px; min-height: 0; }
 html.tv-mode .scroll-y > * { scroll-margin-top: 24px; scroll-margin-bottom: 96px; }
 
 /* 底欄：電視上按得到、看得清 */

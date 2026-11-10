@@ -86,6 +86,11 @@ function nearest(cur: HTMLElement, dir: Dir, list: HTMLElement[]): HTMLElement |
     if (vertical && (r.right <= 0 || r.left >= window.innerWidth)) continue;
     const dx = r.left + r.width / 2 - cx;
     const dy = r.top + r.height / 2 - cy;
+    /* 底部頁籤列（首頁/搜索/分類/我的）不搶內容區的「往下」：
+       內容最後一列按 DOWN 直接跳到頁籤列，使用者會覺得焦點莫名跑掉。
+       要切分頁用數字鍵（1-4），或在頁籤列上左右移動。 */
+    if (dir === "down" && !cur.closest("[data-tv-nav]") && el.closest("[data-tv-nav]")) continue;
+
     const primary = vertical ? dy : dx;
     /* 最小間距：網格裡左右兩欄常差幾像素，用固定 2px 判斷會把「隔壁欄同一列」
        當成「下面那一個」（往下按卻往右跑）。改成跟元素尺寸成比例。 */
@@ -125,6 +130,35 @@ function keyOf(el: HTMLElement): string {
   return (el.getAttribute("aria-label") || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40);
 }
 
+/**
+ * 把元素捲進可視範圍。
+ * scrollIntoView 在某些版面（flex 子項沒有 min-height:0、外層 overflow:hidden）
+ * 會完全不動，遙控器看起來就是「焦點移到下面但畫面不捲」。這裡直接對
+ * 最近的可捲動祖先改 scrollTop，是最可靠的一招。
+ */
+function ensureInView(el: HTMLElement) {
+  const vh = window.innerHeight;
+  let r = el.getBoundingClientRect();
+  if (r.top >= 0 && r.bottom <= vh) return;
+  let p: HTMLElement | null = el.parentElement;
+  while (p) {
+    const cs = getComputedStyle(p);
+    const scrollable = /auto|scroll/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 4;
+    if (scrollable) {
+      const pr = p.getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      if (box.top < pr.top + 8) p.scrollTop += box.top - pr.top - 16;
+      else if (box.bottom > pr.bottom - 8) p.scrollTop += box.bottom - pr.bottom + 16;
+      return;
+    }
+    p = p.parentElement;
+  }
+  /* 沒有可捲動祖先 → 退回視窗捲動 */
+  r = el.getBoundingClientRect();
+  if (r.top < 0) window.scrollBy(0, r.top - 16);
+  else if (r.bottom > vh) window.scrollBy(0, r.bottom - vh + 16);
+}
+
 export function focusEl(el: HTMLElement, scroll = true) {
   if (lastFocused && lastFocused !== el) lastFocused.classList.remove("tv-focus");
   lastFocused = el;
@@ -133,9 +167,15 @@ export function focusEl(el: HTMLElement, scroll = true) {
   try { el.focus({ preventScroll: true }); } catch { /* ignore */ }
   if (scroll) {
     try { el.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch { /* ignore */ }
+    ensureInView(el);
   }
   /* 遙控器沒有滑鼠，出問題時只能靠這行日誌重建「焦點跑去哪」 */
   if (tvOn()) logLine(`[tv] focus ${describe(el)}`);
+  /* 安全網：焦點落在畫面外＝使用者眼中「高亮框不見了」，一定要留下證據 */
+  const rr = el.getBoundingClientRect();
+  if (tvOn() && (rr.right <= 0 || rr.left >= window.innerWidth || rr.bottom <= 0 || rr.top >= window.innerHeight)) {
+    logLine(`[tv] offscreen! vw=${window.innerWidth}x${window.innerHeight} ${describe(el)}`);
+  }
 }
 
 /** 把焦點放到畫面上第一個合理的元素（分頁切換、載入完成後呼叫） */
