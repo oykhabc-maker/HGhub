@@ -21,7 +21,7 @@ import TvMode, { useTvMode } from "./tv/TvMode";
 import { tvOn } from "./tv/tvMode";
 
 /* ============ 底部标签栏（Android）—— 细瘦纯文字、低侵入 ============ */
-function TabBar() {
+function TabBar({ placement = "bottom" }: { placement?: "top" | "bottom" } = {}) {
   const { tab, setTab, theme } = useStore();
   const items: { k: Tab; label: string }[] = [
     { k: "home", label: "首页" },
@@ -34,13 +34,18 @@ function TabBar() {
      浅色主题下底栏跟着换成浅色，深色主题保持深色。 */
   const overVideo = tab === "home";
   const lightBar = !overVideo && theme === "light";
+  const top = placement === "top";
   return (
-    <nav data-tv-nav="1" className="hg-tabbar absolute bottom-0 inset-x-0 z-30"
+    <nav data-tv-nav="1"
+      className={top ? "hg-tabbar shrink-0 relative z-30" : "hg-tabbar absolute bottom-0 inset-x-0 z-30"}
       style={{
-        paddingBottom: "var(--sab, 0px)",
+        paddingTop: top ? "var(--sat, 8px)" : undefined,
+        paddingBottom: top ? 0 : "var(--sab, 0px)",
         background: lightBar ? "rgba(250, 250, 250, .97)" : overVideo ? "#000000" : "#141414",
-        borderTop: lightBar ? "1px solid rgba(0,0,0,.08)" : overVideo ? "none" : "1px solid rgba(255,255,255,.07)",
-        boxShadow: lightBar ? "0 -2px 14px rgba(0,0,0,.05)" : "none",
+        borderTop: top ? "none" : lightBar ? "1px solid rgba(0,0,0,.08)" : overVideo ? "none" : "1px solid rgba(255,255,255,.07)",
+        borderBottom: top ? (lightBar ? "1px solid rgba(0,0,0,.08)" : "1px solid rgba(255,255,255,.10)") : "none",
+        boxShadow: top ? (lightBar ? "0 2px 14px rgba(0,0,0,.06)" : "0 2px 16px rgba(0,0,0,.35)")
+          : lightBar ? "0 -2px 14px rgba(0,0,0,.05)" : "none",
       }}>
       <div className="h-[40px] flex items-center px-1">
         {items.map(({ k, label }) => {
@@ -223,9 +228,14 @@ function ShellInner({ collapsed, theater }: { collapsed: boolean; theater: boole
 
 /* ============ 移动端（无壳） ============ */
 function MobileShell() {
+  const { stack, fs, clean } = useStore();
+  /* 電視模式：頁籤列搬到最上方，遙控器一直按「上」就到得了分頁。
+     它佔版面高度（不是浮在內容上），所以內容不會被蓋住。 */
+  const tvBar = useTvMode() && !fs && !clean && stack.length === 0;
   return (
     <div className="absolute inset-0 flex flex-col bg-canvas plat-android"
       style={{ "--sat": "max(env(safe-area-inset-top), 8px)", "--sab": "max(env(safe-area-inset-bottom), 6px)" } as React.CSSProperties}>
+      {tvBar && <TabBar placement="top" />}
       <div className="relative flex-1 min-h-0">
         <AppBody />
       </div>

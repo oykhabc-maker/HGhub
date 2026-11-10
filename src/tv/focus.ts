@@ -186,7 +186,9 @@ export function focusFirst(root?: ParentNode): boolean {
   /* 文字框放最後：電視上沒有輸入法，先把焦點給可點的內容，
      使用者真的要走搜尋再自己往上一格。 */
   const list = all.filter((el) => !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
-  const pool = list.length ? list : all;
+  /* 頁籤列在電視模式是置頂的，幾何上最靠上 —— 但它不該是「進頁面後的第一個焦點」 */
+  const content = list.filter((el) => !el.closest("[data-tv-nav]"));
+  const pool = content.length ? content : (list.length ? list : all);
   /* 取「最靠上、同高時最靠左」的一個，而不是 DOM 第一個 ——
      DOM 順序在瀑布流 / 橫向列表裡常常不是視覺順序。 */
   let best = pool[0];

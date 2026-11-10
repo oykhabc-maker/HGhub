@@ -595,6 +595,9 @@ html.tv-mode .scroll-y > * { scroll-margin-top: 24px; scroll-margin-bottom: 96px
 
 /* 底欄：電視上按得到、看得清 */
 html.tv-mode .hg-tabbar > div { height: 64px; }
+
+/* 電視模式：頁籤列置頂（由 MobileShell 以 in-flow 方式渲染，不覆蓋內容） */
+html.tv-mode .hg-tabbar[data-tv-nav] { min-height: 64px; }
 html.tv-mode .hg-tabbar span { font-size: 17px !important; }
 
 /* 手機字級 → 電視字級（只影響電視模式） */
