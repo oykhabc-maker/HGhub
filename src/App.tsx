@@ -130,7 +130,7 @@ function AppBody() {
 
   const vis = (k: Tab) => (tab === k ? "absolute inset-0" : "absolute inset-0 invisible pointer-events-none");
   const pageActive = stack.length === 0 && !loginOpen;
-  const bottomInset = isMobile ? (fs || clean ? 0 : (tv ? 68 : 40)) : 14;
+  const bottomInset = isMobile ? (fs || clean || tv ? 0 : 40) : 14;
   /* 栈页（从搜索/分类/我的进入的播放页、图文页）没有底栏，
      底部只让出安全区。之前多留了 20px，视频底边会露出一条
      「底栏」似的窄缝（底部的压暗渐变到不了屏幕最底）。 */
@@ -151,7 +151,9 @@ function AppBody() {
           </div>
         ))}
 
-        {isMobile && !fs && !clean && stack.length === 0 && <TabBar />}
+        {/* 電視模式的頁籤列在 MobileShell 最上方，底欄一律不再渲染，
+            否則畫面上緣與下緣會各出現一條同名頁籤（tv29 的 bug）。 */}
+        {isMobile && !tv && !fs && !clean && stack.length === 0 && <TabBar />}
       </div>
     </div>
   );
