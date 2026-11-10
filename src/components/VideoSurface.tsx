@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, forwardRef, useState } from "react";
 import Hls from "hls.js";
-import { isLocalMedia, platform, playlist } from "../api";
+import { isLocalMedia, logLine, platform, playlist } from "../api";
 import { mediaErrorMessage } from "../mediaErrors";
 import { mediaHost, mediaResource, observeHls, usePlayerDiagnostics } from "../playbackDiagnostics";
 import { usePlaybackActivity } from "../usePlaybackActivity";
@@ -234,7 +234,18 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
       onPlay={() => { if (activity.isActive()) onPlaying?.(); }}
       onPause={() => onPause?.()}
       onWaiting={() => onWaiting?.()}
-      onPlaying={() => { if (activity.isActive()) onPlaying?.(); }}
+      onPlaying={() => {
+        if (activity.isActive()) {
+          const v = videoRef.current;
+          /* 电视上「没声音」最常见两个原因：静音偏好、WebView 自动播放策略。
+             每次开播落一行日志，日后不用猜。 */
+          if (v && !(v as unknown as { __audLogged?: boolean }).__audLogged) {
+            (v as unknown as { __audLogged?: boolean }).__audLogged = true;
+            logLine(`[aud] ${v.muted ? "muted" : "sound"} vol=${v.volume.toFixed(2)} paused=${v.paused}`);
+          }
+          onPlaying?.();
+        }
+      }}
       onEnded={() => { if (activity.isActive()) onEnded?.(); }}
       onError={handleVideoError}
     />

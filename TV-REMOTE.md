@@ -28,7 +28,11 @@
   - 有 `[data-tv-overlay]` 時只在彈層內移動
   - 播放器標記 `[data-tv-playing]` 時方向鍵交還播放器
   - 焦點框只由 `.tv-focus` 畫（單一高亮）
-- `TvMode.tsx` — 掛載引擎、換頁後焦點歸位、電視首次啟動預設停在「分類」。
+- `bridge.ts` — 原生按鍵橋接：部分電視盒（實測 Google TV Streamer / Android 14）的 WebView
+  會把方向鍵當成自己的焦點導航吃掉，`keydown` 根本送不到 JS（數字鍵卻正常）。
+  `MainActivity.dispatchKeyEvent` 攔下 DPAD 後呼叫 `window.__tvKey(code)`，
+  由前端合成一次 `keydown`，焦點引擎與播放器都走同一條路。
+- `TvMode.tsx` — 掛載引擎、換頁後焦點歸位、電視每次啟動停在「分類」。
 
 改動的既有檔案：
 
@@ -37,7 +41,18 @@
 - `src/components/Feed.tsx` — `Enter` 播放/暫停；根節點標記 `data-tv-playing`。
 - `src/components/ui.tsx` — `Sheet` / `Modal` 開啟時加 `data-tv-overlay`（焦點陷阱）。
 - `src/pages/Settings.tsx` — 「電視模式（遙控器）」開關。
+- `src-tauri/gen/android/.../MainActivity.kt` — `dispatchKeyEvent` 的 DPAD 攔截（見上）。
+  **這個檔在 `gen/` 裡，重跑 `tauri android init` 會被蓋掉，要一併還原。**
 - `src/index.css` — `.tv-focus` 焦點框、底欄高度 64px、電視字級/卡片尺寸放大。
+
+## 電視版差異（相對上游）
+
+- **開機帶聲**：上游 `muteOnStartup` 預設 `true`（每次啟動靜音），電視版改為預設不靜音，
+  並用 `hghub_unmute_v1` 做一次性遷移（舊安裝也會被改過來），之後完全尊重使用者在
+  設定裡的選擇。
+- **允許帶聲自動播放**：`MainActivity.onWebViewCreate` 設
+  `settings.mediaPlaybackRequiresUserGesture = false`，否則 Chromium 會把自動播放的影片靜音。
+- 每次開播寫一行 `[aud] sound vol=0.70 paused=false` 到 debug.log，日後查「沒聲音」不用猜。
 
 ## 遙控器操作對照
 

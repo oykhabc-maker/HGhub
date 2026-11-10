@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { logLine } from "../api";
+import { installRemoteBridge } from "./bridge";
 import { armRemoteWatcher, initTvMode, setTvMode, subscribeTv, tvOn } from "./tvMode";
 import { blurFocus, focusFirst, focusIsAlive, installFocusEngine, playerActive } from "./focus";
 
@@ -10,6 +11,7 @@ export default function TvMode() {
   const [on, setOn] = useState(() => initTvMode());
 
   useEffect(() => {
+    installRemoteBridge();
     const unArm = armRemoteWatcher();
     const unSub = subscribeTv(setOn);
     return () => { unArm(); unSub(); };

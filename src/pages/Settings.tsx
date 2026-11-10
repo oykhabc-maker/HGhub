@@ -118,7 +118,7 @@ export default function Settings({ onBack, wide }: { onBack: () => void; wide: b
               <span className="w-8 h-8 rounded-full bg-s3 flex items-center justify-center text-primary"><IVolMute size={16} /></span>
               <div className="flex-1 min-w-0">
                 <div className="text-[12.5px] text-on">启动时静音</div>
-                <div className="text-[10.5px] text-mut">默认开启，每次启动均静音；关闭后记住上次静音状态。下次启动生效。</div>
+                <div className="text-[10.5px] text-mut">电视版默认关闭（开机即带声）。开启后每次启动均静音；下次启动生效。</div>
               </div>
               <Toggle on={muteOnStartup} onChange={setMuteOnStartup} label="启动时静音" />
             </div>
