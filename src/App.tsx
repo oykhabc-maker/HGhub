@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useStore, type Page, type Tab } from "./store";
-import { isMobile, selfTest } from "./api";
+import { isMobile, logLine, selfTest } from "./api";
 import { addPluginListener, invoke } from "@tauri-apps/api/core";
 import { runBack } from "./back";
 import Home from "./pages/Home";
 import Search, { RankPage } from "./pages/Search";
+import HistoryPage from "./pages/History";
 import Category, { ChannelPage } from "./pages/Category";
 import Profile from "./pages/Profile";
 import SettingsPage from "./pages/Settings";
@@ -82,6 +83,7 @@ function StackPage({ page, onBack, wide, top, bottomInset }: {
   }
   if (page.kind === "channel") return <ChannelPage cate={page.cate} name={page.name} onBack={onBack} wide={wide} />;
   if (page.kind === "ranks") return <RankPage onBack={onBack} wide={wide} />;
+  if (page.kind === "history") return <HistoryPage onBack={onBack} />;
   if (page.kind === "settings") return <SettingsPage onBack={onBack} wide={wide} />;
   if (page.kind === "posts") return <PostsPage onBack={onBack} wide={wide} />;
   if (page.kind === "post") return <PostDetail id={page.id} onBack={onBack} active={top} />;
@@ -246,7 +248,21 @@ function MobileShell() {
 
 /* ============ 入口 ============ */
 export default function App() {
-  const { platform, loginOpen, setLoginOpen, tab, setTab, stack, pop, fs, setFs, toast } = useStore();
+  const { platform, loginOpen, setLoginOpen, tab, setTab, stack, pop, fs, setFs, toast, bumpRefresh } = useStore();
+  /* 回到前景（MainActivity.onResume，且不是從原生播放器回來）→ 重新抓最新內容。
+     正在播的時候不要動：那會把使用者正在看的片單換掉。 */
+  useEffect(() => {
+    const w = window as unknown as { __hgAppResume?: () => void };
+    w.__hgAppResume = () => {
+      if (document.querySelector("[data-tv-playing]")) {
+        logLine("[refresh] app resume — 正在播放，跳過更新");
+        return;
+      }
+      logLine("[refresh] app resume → 重抓首頁/分類最新內容");
+      bumpRefresh();
+    };
+    return () => { delete w.__hgAppResume; };
+  }, [bumpRefresh]);
   useEffect(() => {
     tracePlayback("navigation.change", { tab, stack: stack.map(p => ({ page: p.kind, key: p.key })), login_open: loginOpen });
   }, [tab, stack, loginOpen]);

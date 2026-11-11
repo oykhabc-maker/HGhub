@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, useRef, forwardRef, useState } from "react";
 import Hls from "hls.js";
 import { isLocalMedia, logLine, platform, playlist } from "../api";
-import { NATIVE_MEDIA_ORIGIN, nativePlayUrl, nativePlayerAvailable } from "../tv/bridge";
+import { NATIVE_MEDIA_ORIGIN, nativePlayUrl, nativePlayerAvailable, nativeSessionUrl } from "../tv/bridge";
 import { tvOn } from "../tv/tvMode";
 import { mediaErrorMessage } from "../mediaErrors";
 import { mediaHost, mediaResource, observeHls, usePlayerDiagnostics } from "../playbackDiagnostics";
@@ -103,6 +103,12 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
     /* Fire TV：Amazon WebView 的硬體解碼只出聲不出影（表面卡在 1 MB），
        電視版改由原生 ExoPlayer 播放同一個 HLS 代理網址。 */
     if (tvOn() && nativePlayerAvailable()) {
+      /* 看不見的頁面（例如電視開機停在分類時，背景仍掛著的首頁）不要偷開播放器：
+         之前一開機就自動跳進某一部劇，就是這條路徑造成的。 */
+      if (!active) {
+        logLine("[play] native skipped (page inactive)");
+        return;
+      }
       /* 原生播放器接不到 hg.localhost（Tauri 自定義協議），改走 loopback 代理 */
       const nativeUrl = url.startsWith(NATIVE_MEDIA_ORIGIN) ? url : url.replace(/^https?:\/\/[^/]+/, NATIVE_MEDIA_ORIGIN);
       logLine(`[play] native url=${nativeUrl.slice(0, 90)} start=${startAt.toFixed(1)}s`);
@@ -198,12 +204,23 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src]);
 
+  /* 頁面變成「看得見」時（遙控器切回首頁、棧頁回到最上層）才補開原生播放器：
+     否則電視開機會被背景的首頁自動拉進某一部劇。 */
+  useEffect(() => {
+    if (!active || !src || !tvOn() || !nativePlayerAvailable()) return;
+    const url = isLocalMedia(src) ? src : playlist(src);
+    const nativeUrl = url.startsWith(NATIVE_MEDIA_ORIGIN) ? url : url.replace(/^https?:\/\/[^/]+/, NATIVE_MEDIA_ORIGIN);
+    if (nativeSessionUrl() === nativeUrl) return;
+    logLine(`[play] native on-active url=${nativeUrl.slice(0, 90)} start=${startAt.toFixed(1)}s`);
+    nativePlayUrl(nativeUrl, startAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, src]);
+
   // iOS 内联播放：部分 WKWebView 只认 HTML 属性
   useEffect(() => {
     const v = videoRef.current;
     if (v) v.setAttribute("webkit-playsinline", "true");
   }, []);
-
   useEffect(() => { if (videoRef.current) videoRef.current.muted = muted; }, [muted]);
   useEffect(() => { if (videoRef.current) videoRef.current.volume = volume; }, [volume]);
   useEffect(() => { if (videoRef.current) videoRef.current.playbackRate = rate; }, [rate]);

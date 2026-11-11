@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { api, platform as envPlatform } from "./api";
 import { isStrictSecurity, setStrictSecurity as setHtmlStrictSecurity } from "./html";
 import type { User } from "./types";
+import { tvOn } from "./tv/tvMode";
 
 export type Platform = "android" | "ios" | "windows" | "macos" | "linux";
 export type Theme = "dark" | "light";
@@ -25,6 +26,7 @@ export type Page =
   | FeedContext
   | { kind: "channel"; key: string; cate: string; name: string }
   | { kind: "ranks"; key: string }
+  | { kind: "history"; key: string }
   | { kind: "settings"; key: string }
   | { kind: "posts"; key: string }
   | { kind: "post"; key: string; id: number }
@@ -37,6 +39,7 @@ export type PageInput =
   | { kind: "feed"; videoIds: number[]; index: number; title: string; source?: string; feedKind?: "video" | "post"; startEp?: number; startTime?: number }
   | { kind: "channel"; cate: string; name: string }
   | { kind: "ranks" }
+  | { kind: "history" }
   | { kind: "settings" }
   | { kind: "posts" }
   | { kind: "post"; id: number }
@@ -166,6 +169,9 @@ type Store = {
   toasts: Toast[]; toast: (msg: string, icon?: Toast["icon"]) => void;
   /** 线路切换计数：变了就让列表页重挂载，重新拉一遍数据 */
   lineEpoch: number;
+  /** 回到前景计数：每次重新進入 App 就 +1，讓首頁/分類重新抓最新內容 */
+  refreshEpoch: number;
+  bumpRefresh: () => void;
 };
 
 const Ctx = createContext<Store>(null as unknown as Store);
@@ -175,12 +181,16 @@ let seq = 0;
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [p, setP] = useState<Persist>(loadPersist);
   const [theme, setThemeState] = useState<Theme>(readTheme);
-  const [tab, setTabRaw] = useState<Tab>("home");
+  /* 電視開機直接停在「分類」：首頁是全螢幕自動播放的短劇流，
+     若等 effect 再切分頁，Home 會先掛載並自動播一部（使用者根本沒選片）。 */
+  const [tab, setTabRaw] = useState<Tab>(() => (tvOn() ? "category" : "home"));
   const [stack, setStack] = useState<Page[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [lineEpoch, setLineEpoch] = useState(0);
+  const [refreshEpoch, setRefreshEpoch] = useState(0);
+  const bumpRefresh = useCallback(() => setRefreshEpoch((n) => n + 1), []);
   const [theater, setTheaterState] = useState(false);
   const [fs, setFsState] = useState(false);
   const [clean, setCleanState] = useState(false);
@@ -389,10 +399,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     searchHist: p.searchHist, addSearch, clearSearchHist,
     strictSecurity, strictSecurityReady, securityPending, cliRelaxed, setStrictSecurity,
     toasts, toast, lineEpoch,
+    refreshEpoch, bumpRefresh,
   }), [theme, tab, setTab, stack, push, pop, user, loginOpen, logout,
     p, toggleLikeLocal, toggleFavLocal, toggleFollowLocal, addHistory, clearHistory,
     setMuted, setMuteOnStartup, setSwipeEp, setVolume, addSearch, clearSearchHist, strictSecurity, strictSecurityReady, securityPending, cliRelaxed, setStrictSecurity,
-    toasts, toast, lineEpoch, theater, setTheater, fs, setFs, clean, setClean]);
+    toasts, toast, lineEpoch, theater, setTheater, fs, setFs, clean, setClean, refreshEpoch, bumpRefresh]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

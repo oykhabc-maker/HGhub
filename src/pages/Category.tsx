@@ -4,7 +4,7 @@ import type { Post, VideoCard } from "../types";
 import { useStore } from "../store";
 import { Masonry, RowCard } from "../components/cards";
 import { Empty, Img } from "../components/ui";
-import { IBack, IChevR, IGlobe, IGrid, ITrophy } from "../icons";
+import { IBack, IChevR, IGlobe, IGrid, IHist, ITrophy } from "../icons";
 
 export const CHANNELS = [
   { cate: "ai-duanju", name: "AI成人短剧", desc: "高能反转 · 一口气看完" },
@@ -13,9 +13,20 @@ export const CHANNELS = [
   { cate: "ai-mogai", name: "AI魔改", desc: "魔改名场面 · 脑洞大开" },
 ] as const;
 
+/* 從較大的清單隨機挑 n 個：讓每次開 App 的頻道預覽都不一樣 */
+function pickSome<T>(arr: T[], n: number): T[] {
+  if (arr.length <= n) return arr;
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
+}
+
 /* ================= 分类总览 ================= */
 export default function Category({ wide, active }: { wide: boolean; active: boolean }) {
-  const { push } = useStore();
+  const { push, history, refreshEpoch } = useStore();
   const [rows, setRows] = useState<Record<string, VideoCard[]>>({});
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
@@ -39,8 +50,10 @@ export default function Category({ wide, active }: { wide: boolean; active: bool
         const result = await api.posts(1, 8);
         if (mounted.current) setPosts(result?.items || []);
       } else {
-        const result = await api.category(key, 1, 8);
-        if (mounted.current) setRows(m => ({ ...m, [key]: result?.items || [] }));
+        /* 一次抓 24 個再隨機挑 8 個：伺服器的第一頁往往固定不動，
+           照原樣顯示就會「每次開 App 都同一批」。隨機挑選讓預覽每次都換。 */
+        const result = await api.category(key, 1, 24);
+        if (mounted.current) setRows(m => ({ ...m, [key]: pickSome(result?.items || [], 8) }));
       }
     } catch (error) {
       if (mounted.current) setErrors(m => ({ ...m, [key]: (error as Error).message || "加载失败" }));
@@ -57,6 +70,17 @@ export default function Category({ wide, active }: { wide: boolean; active: bool
     CHANNELS.forEach(c => { void loadPreview(c.cate); });
     void loadPreview("posts");
   }, [active, loadPreview]);
+
+  /* 重新進入 App：即使這一輪已經載入過，也再抓一次頻道預覽，讓內容換成最新的。 */
+  const epochRef = useRef(refreshEpoch);
+  useEffect(() => {
+    if (epochRef.current === refreshEpoch) return;
+    epochRef.current = refreshEpoch;
+    if (!active) return;
+    started.current = true;
+    CHANNELS.forEach((c) => { void loadPreview(c.cate); });
+    void loadPreview("posts");
+  }, [refreshEpoch, active, loadPreview]);
 
   return (
     <div className="absolute inset-0 bg-bg flex flex-col">
@@ -75,6 +99,19 @@ export default function Category({ wide, active }: { wide: boolean; active: bool
           <span className="flex-1">
             <span className="block text-[14.5px] font-semibold text-on">排行榜</span>
             <span className="block text-[10.5px] text-mut mt-0.5">热播榜 · 推荐榜 · 潜力榜</span>
+          </span>
+          <IChevR size={16} className="text-mut" />
+        </button>
+
+        {/* 歷史播放入口：電視模式沒有頁籤列，這裡是遙控器最短路徑 */}
+        <button onClick={() => push({ kind: "history" })}
+          className="mx-4 mb-2.5 w-[calc(100%-2rem)] flex items-center gap-3 rounded-(--r-md) bg-s2 p-3.5 text-left pressable elev-1">
+          <span className="w-10 h-10 rounded-(--r-sm) bg-pc text-on-pc flex items-center justify-center shrink-0"><IHist size={20} /></span>
+          <span className="flex-1">
+            <span className="block text-[14.5px] font-semibold text-on">歷史播放</span>
+            <span className="block text-[10.5px] text-mut mt-0.5">
+              {history.length ? `接著上次看到的地方 · ${history.length} 條記錄` : "看過的劇集會出現在這裡"}
+            </span>
           </span>
           <IChevR size={16} className="text-mut" />
         </button>

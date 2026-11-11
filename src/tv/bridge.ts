@@ -57,6 +57,12 @@ export const NATIVE_MEDIA_ORIGIN = "http://127.0.0.1:17650";
 /** 原生播放器是否已經開著（開著就一直用 load 原地換集，不要疊第二個 Activity） */
 let launched = false;
 let epLabel = "";
+/** 最後送給原生播放器的網址：頁面「變成看得見」時用它判斷要不要補開播放器 */
+let lastUrl = "";
+
+export function nativeSessionUrl(): string {
+  return lastUrl;
+}
 
 /** 播放器上要顯示的集數標籤（原生播放器用 Toast 顯示） */
 export function setNativeLabel(label: string) {
@@ -66,6 +72,7 @@ export function setNativeLabel(label: string) {
 /** 原生播放器關掉後由 MainActivity 標記，避免重複 startActivity */
 export function nativeClosed() {
   launched = false;
+  lastUrl = "";
 }
 
 /**
@@ -82,6 +89,7 @@ export function nativePlayUrl(url: string, startSec = 0): boolean {
       b.play(url, startMs);
       launched = true;
     }
+    lastUrl = url;
     return true;
   } catch {
     return false;

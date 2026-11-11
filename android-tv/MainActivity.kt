@@ -18,11 +18,18 @@ class MainActivity : TauriActivity() {
 
   override fun onResume() {
     super.onResume()
-    /* 原生播放器關掉後回到 WebView：等同按一次返回鍵，回到上一層 */
     if (nativePlaybackActive) {
+      /* 原生播放器關掉後回到 WebView：等同按一次返回鍵，回到上一層 */
       nativePlaybackActive = false
       web?.evaluateJavascript(
         "window.__hgNativeClosed && window.__hgNativeClosed()",
+        null
+      )
+    } else {
+      /* 從電視桌面/別處回到 App：叫前端重抓最新內容
+         （電視不會重載 WebView，沒有這條就永遠是上次那一批片）。 */
+      web?.evaluateJavascript(
+        "window.__hgAppResume && window.__hgAppResume()",
         null
       )
     }

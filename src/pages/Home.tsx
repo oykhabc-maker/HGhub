@@ -17,7 +17,7 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export default function Home({ active, bottomInset }: { active: boolean; bottomInset: number }) {
-  const { toast } = useStore();
+  const { toast, refreshEpoch } = useStore();
   const [items, setItems] = useState<VideoCard[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -51,6 +51,30 @@ export default function Home({ active, bottomInset }: { active: boolean; bottomI
   }, [done, toast]);
 
   useEffect(() => { if (!items.length) load(1); /* eslint-disable-next-line */ }, []);
+
+  /* 每次重新進入 App（refreshEpoch +1）就重抓第一頁並重新洗牌：
+     電視常駐在背景，WebView 不會重載，沒有這條的話內容永遠是同一天那一批。 */
+  const epochRef = useRef(refreshEpoch);
+  useEffect(() => {
+    if (epochRef.current === refreshEpoch) return;
+    epochRef.current = refreshEpoch;
+    let alive = true;
+    loadingRef.current = false;
+    setError("");
+    (async () => {
+      try {
+        const res = await api.feed(1, 30);
+        if (!alive) return;
+        const list = res?.items || [];
+        setItems(shuffle(list));
+        setPage(1);
+        setDone(!list.length || !!(res?.pagination && 1 >= res.pagination.pages));
+      } catch {
+        /* 抓不到就保留舊片單，不要把畫面清空 */
+      }
+    })();
+    return () => { alive = false; };
+  }, [refreshEpoch]);
 
   const ids = items.map((v) => v.id);
 
