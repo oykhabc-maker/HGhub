@@ -116,3 +116,37 @@ W/chromium: Video renderer video frame queue is empty → TransitionToHaveNothin
 
 **v1 限制**：原生播放器只播當前這一集；切集仍回 App 用上下鍵選。
 要在播放器內切集，需要把整季的播放網址一起傳給原生端（多幾十個 API 請求），下一版再做。
+
+**tv31 補完**：上面那條已經做了，而且順手把「播完不會自動跳下一集」補上。
+
+## 原生播放器與 WebView 的狀態契約（tv31）
+
+電視上播放發生在 `PlayerActivity`（ExoPlayer），WebView 的 `<video>` 從頭到尾沒載入，
+所以「進度」「播完」「續播」都必須另外搭橋，否則前端永遠不知道播到哪：
+
+| 方向 | 介面 | 用途 |
+|---|---|---|
+| 原生 → JS | `window.__hgNativeTick(posMs, durMs, playing)`（每秒一次） | 寫觀看記錄、更新進度條 |
+| 原生 → JS | `window.__hgNativeEnded()` | 播完先問前端：有下一集就 `HGPlayer.load()` 原地換源，沒有才關閉 |
+| 原生 → JS | `window.__hgEpStep(±1)` | 上下鍵換集（前端算下一集） |
+| JS → 原生 | `HGPlayer.play(url, startMs)` / `load(url, label, startMs)` | `startMs` = 續播起點，原生端等 `STATE_READY` 才 seek |
+| JS → 原生 | `HGPlayer.close()` | 片尾沒有下一集時關掉播放器回列表 |
+
+另外：
+
+- `window.__hgAppResume()`：`MainActivity.onResume` 不是從原生播放器回來時呼叫，
+  前端據此重抓首頁／分類（電視不會重載 WebView，否則永遠是上次那一批片）。
+  正在播（`[data-tv-playing]`）時跳過，避免把正在看的片單換掉。
+- 看不見的頁面（`active=false`）不准開原生播放器：電視開機停在「分類」時，
+  背景仍掛著首頁，之前會一開機就自動跳進某一部劇。
+- 分類頁的頻道預覽改成抓 24 筆隨機挑 8 筆：伺服器第一頁固定不動，照原樣顯示就「每次都一樣」。
+
+## 歷史播放（tv31）
+
+電視版把頁籤列整個拿掉後，遙控器只剩數字鍵能切分頁，於是「我的 → 觀看歷史」變得很難到。
+`src/pages/History.tsx` 把它拉出來做成獨立頁，入口放在分類頁「排行榜」下面：
+
+- 一列一部：封面、標題、第幾集、看到幾分幾秒、進度條
+- 點進去直接 `startEp` + `startTime` 續播（片尾 10 秒內視為看完，從該集開頭播）
+- 底部可清空觀看記錄（只存在本機 localStorage，不上傳）
+
