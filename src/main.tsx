@@ -4,7 +4,7 @@ import App from "./App";
 import { AppProvider } from "./store";
 import { invoke } from "@tauri-apps/api/core";
 import "./index.css";
-import { initPlaybackLog, installPlaybackPageEvents, tracePlayback } from "./playbackDiagnostics";
+import { initPlaybackLog, installPlaybackPageEvents, tracePlayback } from "./player/playbackDiagnostics";
 import { APP_VERSION, LOCAL, logLine, platform, webviewVersion } from "./api";
 import Hls from "hls.js";
 import { installLayoutDiagnostics } from "./layoutDiagnostics";

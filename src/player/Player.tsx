@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { fmtTime, platform, playlist } from "../api";
-import { mediaErrorMessage } from "../mediaErrors";
-import { mediaHost, mediaResource, observeHls, usePlayerDiagnostics } from "../playbackDiagnostics";
-import { usePlaybackActivity } from "../usePlaybackActivity";
-import { useSeekInput } from "../useSeekInput";
+import { mediaErrorMessage } from "./mediaErrors";
+import { mediaHost, mediaResource, observeHls, usePlayerDiagnostics } from "./playbackDiagnostics";
+import { usePlaybackActivity } from "./usePlaybackActivity";
+import { useSeekInput } from "./useSeekInput";
 import PlaybackLock from "./PlaybackLock";
 import { ICompress, IExpand, ILockF, IPauseF, IPlayF, IVol, IVolMute } from "../icons";
 

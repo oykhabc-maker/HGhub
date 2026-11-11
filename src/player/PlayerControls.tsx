@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fmtTime } from "../api";
-import { useSeekInput } from "../useSeekInput";
+import { useSeekInput } from "./useSeekInput";
 import { ICheck, ICompress, IExpand, ILockF, INext, IPauseF, IPip, IPlayF, ITheater, IVertSwap, IVol, IVolMute } from "../icons";
 
 type Props = {

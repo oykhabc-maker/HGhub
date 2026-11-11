@@ -35,6 +35,13 @@ const fixture = {
 Object.assign(window, {
   apiLoadingFixture: fixture,
   __TAURI_INTERNALS__: { invoke(cmd: string, args: Record<string, unknown> = {}) {
+    if (cmd === "gate_state") return Promise.resolve({ base: "https://fixture.invalid", adapter: "edge_v1", activated: true });
+    if (cmd === "data_call") {
+      const command = (args.command || {}) as Record<string, unknown>;
+      const map: Record<string, string> = { boot: "app_boot", feed: "api_feed", category: "api_category", posts: "api_posts", search_hot: "api_search_hot", play: "api_play" };
+      cmd = map[String(command.cmd)] || String(command.cmd);
+      args = { ...command }; delete (args as Record<string, unknown>).cmd;
+    }
     if (cmd === "app_boot") return Promise.resolve({ user: null, logged_in: false, base: "https://fixture.invalid" });
     if (cmd === "debug_log") { fixture.debug.push(String(args.msg)); return Promise.resolve(); }
     if (!["api_feed", "api_category", "api_posts"].includes(cmd)) return Promise.reject(`Unexpected IPC: ${cmd}`);

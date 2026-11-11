@@ -1,5 +1,5 @@
 import { logLine, platform } from "./api";
-import { tracePlayback } from "./playbackDiagnostics";
+import { tracePlayback } from "./player/playbackDiagnostics";
 
 /* 只测量 iOS 视口几何；探针读完立即移除，不修改页面尺寸或滚动位置。 */
 export function installLayoutDiagnostics() {

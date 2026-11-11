@@ -3,23 +3,21 @@ import { api, APP_VERSION, hostOf, logLine, platform, type UpdateInfo } from "..
 import { APP_NAME } from "../branding";
 import { useStore } from "../store";
 import { Modal, Toggle } from "../components/ui";
-import LinePicker from "../components/LinePicker";
-import { autoLineEnabled, pickLine, setAutoLine } from "../autoLine";
-import { copyPlaybackLog, initPlaybackLog, setPlaybackLog, tracePlayback, usePlaybackLog } from "../playbackDiagnostics";
+import GateDialog from "../components/GateDialog";
+import { copyPlaybackLog, initPlaybackLog, setPlaybackLog, tracePlayback, usePlaybackLog } from "../player/playbackDiagnostics";
 import { formatNetDiag, shortVerdict } from "../netDiagReport";
 import { copyText } from "../clipboard";
 import { IBack, IBoltF, IBroom, IChevR, IHeart, IInfo, ILink, ILockF, IMoon, IRefresh, ISettings, ISun, IVolMute, IList, Logo } from "../icons";
 
-/* 独立设置页：线路 / 外观 / 播放 / 本地数据 / 清理缓存 / 网络诊断 / 关于
+/* 独立设置页：接入地址 / 外观 / 播放 / 本地数据 / 清理缓存 / 网络诊断 / 关于
    入口：Windows 侧栏「设置」、Android「我的」右上角齿轮 */
 export default function Settings({ onBack, wide }: { onBack: () => void; wide: boolean }) {
-  const { theme, setTheme, favs, history, muteOnStartup, setMuteOnStartup, swipeEp, setSwipeEp, preferHevc, setPreferHevc, strictSecurity, strictSecurityReady, securityPending, cliRelaxed, setStrictSecurity, toast } = useStore();
+  const { theme, setTheme, favs, history, muteOnStartup, setMuteOnStartup, swipeEp, setSwipeEp, preferHevc, setPreferHevc, strictSecurity, strictSecurityReady, securityPending, cliRelaxed, setStrictSecurity, toast, gate } = useStore();
   const [about, setAbout] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [lineOpen, setLineOpen] = useState(false);
   const [lineBase, setLineBase] = useState("");
-  const [autoLineOn, setAutoLineOn] = useState(autoLineEnabled());
   const [checking, setChecking] = useState(false);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   /** 应用内更新进行到哪一步（空串=没在更新） */
@@ -30,10 +28,7 @@ export default function Settings({ onBack, wide }: { onBack: () => void; wide: b
   const [diagReport, setDiagReport] = useState<string | null>(null);
   const [copyingReport, setCopyingReport] = useState(false);
 
-  const readLine = () => {
-    api.lineState().then((s) => setLineBase(s.base)).catch(() => {});
-  };
-  useEffect(readLine, []);
+  useEffect(() => { setLineBase(gate.base); }, [gate.base]);
   useEffect(() => { void initPlaybackLog(); }, []);
 
   const checkUpdate = async () => {
@@ -154,26 +149,11 @@ export default function Settings({ onBack, wide }: { onBack: () => void; wide: b
             <button onClick={() => setLineOpen(true)} className="w-full flex items-center gap-3 px-3.5 py-3 text-left pressable">
               <span className="w-8 h-8 rounded-full bg-s3 flex items-center justify-center text-primary"><IBoltF size={16} /></span>
               <div className="flex-1 min-w-0">
-                <div className="text-[12.5px] text-on">线路</div>
-                <div className="text-[10.5px] text-mut truncate">{lineBase ? hostOf(lineBase) : "固定线路 1（默认）"}</div>
+                <div className="text-[12.5px] text-on">接入地址</div>
+                <div className="text-[10.5px] text-mut truncate">{lineBase ? hostOf(lineBase) : "未设置"}</div>
               </div>
               <IChevR size={15} className="text-mut" />
             </button>
-            <div className="flex items-center gap-3 px-3.5 py-3">
-              <span className="w-8 h-8 rounded-full bg-s3 flex items-center justify-center text-primary"><IRefresh size={15} /></span>
-              <div className="flex-1 min-w-0">
-                <div className="text-[12.5px] text-on">自动选择线路</div>
-              </div>
-              <Toggle
-                on={autoLineOn}
-                onChange={(on) => {
-                  setAutoLine(on);
-                  setAutoLineOn(on);
-                  toast(on ? "已开启：线路跟着网络自动选" : "已关闭：改用手动选线");
-                  if (on) void pickLine("manual", true).then(readLine);
-                }}
-              />
-            </div>
             <div className="flex items-center gap-3 px-3.5 py-3">
               <span className="w-8 h-8 rounded-full bg-s3 flex items-center justify-center text-primary"><ILockF size={15} /></span>
               <div className="flex-1 min-w-0">
@@ -284,7 +264,7 @@ export default function Settings({ onBack, wide }: { onBack: () => void; wide: b
         </div>
       </div>
 
-      <LinePicker open={lineOpen} onClose={() => { setLineOpen(false); readLine(); }} />
+      <GateDialog open={lineOpen} onClose={() => setLineOpen(false)} />
 
       <Modal open={diagReport !== null} onClose={() => setDiagReport(null)} width={520}>
         <div className="p-5">

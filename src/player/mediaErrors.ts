@@ -1,4 +1,4 @@
-import { isLinux } from "./api";
+import { isLinux } from "../api";
 
 export function mediaErrorMessage(error: MediaError | null): string {
   switch (error?.code) {

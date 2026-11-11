@@ -8,15 +8,16 @@ import Search, { RankPage } from "./pages/Search";
 import Category, { ChannelPage } from "./pages/Category";
 import Profile from "./pages/Profile";
 import SettingsPage from "./pages/Settings";
-import Feed from "./components/Feed";
+import Feed from "./pages/Feed";
 import { PostsPage, PostDetail } from "./pages/Posts";
 import { TopicsPage, TopicPage, TagsPage, TagPage } from "./pages/Discover";
 import { FollowingPage, UserPage } from "./pages/User";
 import LoginModal from "./components/LoginModal";
+import SourceGate from "./components/SourceGate";
 import { ToastHost } from "./components/ui";
 import { DesktopRail, DesktopTitleBar } from "./components/DesktopChrome";
 import ResizeHandles from "./components/ResizeHandles";
-import { tracePlayback } from "./playbackDiagnostics";
+import { tracePlayback } from "./player/playbackDiagnostics";
 import { IGrid, IGridF, IHome, IHomeF, ISearch, IUser, IUserF, Logo } from "./icons";
 
 /* ============ 底部标签栏（移动端）—— iOS 26 液态玻璃悬浮胶囊 ============ */
@@ -265,7 +266,7 @@ function MobileShell() {
 
 /* ============ 入口 ============ */
 export default function App() {
-  const { platform, loginOpen, setLoginOpen, tab, setTab, stack, pop, fs, setFs } = useStore();
+  const { platform, loginOpen, setLoginOpen, tab, setTab, stack, pop, fs, setFs, gate, gateReady } = useStore();
   useEffect(() => {
     tracePlayback("navigation.change", { tab, stack: stack.map(p => ({ page: p.kind, key: p.key })), login_open: loginOpen });
   }, [tab, stack, loginOpen]);
@@ -335,6 +336,13 @@ export default function App() {
     }, 2500);
     return () => window.clearTimeout(t);
   }, []);
+
+  if (!gateReady) {
+    return <div className="absolute inset-0 bg-canvas" aria-busy="true" />;
+  }
+  if (!gate.activated) {
+    return <SourceGate />;
+  }
 
   return (
     <>

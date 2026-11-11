@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { tracePlayback } from "./playbackDiagnostics";
+import { tracePlayback } from "./player/playbackDiagnostics";
+import { dataCall, type DataCommand } from "./data/client";
 import type {
-  CommentPage, Detail, HotWord, Paged, PlayInfo, Post, PostCategory, RankItem, TagGroup, TopicCard, TopicDetail, User, UserProfile, VideoCard,
+  BootInfo, CommentPage, Detail, GateState, HotWord, Paged, PlayInfo, Post, PostCategory, RankItem, TagGroup, TopicCard, TopicDetail, User, UserProfile, VideoCard,
 } from "./types";
 
 /* ── 运行环境 ───────────────────────────────────────────── */
@@ -75,8 +76,37 @@ const failMessage = (msg: string, status?: string) =>
     ? `服务器请求失败（HTTP ${status}），请稍后重试或在设置中切换线路`
     : msg.length > 140 ? `${msg.slice(0, 140)}…` : msg;
 
+/** 业务命令 → 壳层 DomainCommand 名。非业务命令（门牌/系统）继续直连。 */
+const DATA_COMMANDS: Record<string, string> = {
+  app_boot: "boot",
+  api_login: "login", api_register: "register", api_logout: "logout", api_me: "me",
+  api_feed: "feed", api_topics: "topics", api_topic: "topic", api_tags: "tags",
+  api_tag_videos: "tag_videos", api_category: "category", api_rank: "rank",
+  api_search: "search", api_search_hot: "search_hot",
+  api_posts: "posts", api_post: "post", api_post_playback: "post_playback",
+  api_post_like: "post_like", api_post_collect: "post_collect",
+  api_post_comments: "post_comments", api_post_categories: "post_categories", api_post_category: "post_category",
+  api_video: "video", api_play: "play", api_comments: "comments", api_comment_send: "comment_send",
+  api_like: "like", api_collect: "collect", api_follow: "follow", api_related: "related",
+  api_following: "following", api_user: "user", api_user_stats: "user_stats", api_user_videos: "user_videos",
+};
+
+/** 把旧的扁平参数转成 Rust `DomainCommand` 的字段形状。 */
+function domainCommand(cmd: string, args?: Record<string, unknown>): Record<string, unknown> | null {
+  const name = DATA_COMMANDS[cmd];
+  if (!name) return null;
+  const command: Record<string, unknown> = { cmd: name, ...(args || {}) };
+  if (name === "register") command.confirm_password = command.password ?? "";
+  if (name === "comment_send") { command.reply_id = command.replyId ?? 0; delete command.replyId; }
+  if (name === "search") command.kind = command.kind ?? "";
+  return command;
+}
+
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const once = () => invoke(cmd, args) as Promise<T>;
+  const command = domainCommand(cmd, args);
+  const once = command
+    ? () => dataCall<T>(command as DataCommand)
+    : () => invoke(cmd, args) as Promise<T>;
   try {
     const r = await once();
     notifyNet({ ok: true, cmd });
@@ -115,14 +145,10 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 /* ── 接口 ───────────────────────────────────────────────── */
 
 export const api = {
-  boot: () =>
-    call<{
-      user: User | null;
-      logged_in: boolean;
-      base: string;
-      strict_security?: boolean;
-      cli_relaxed?: boolean;
-    }>("app_boot"),
+  boot: () => call<BootInfo>("app_boot"),
+  gateState: () => invoke<GateState>("gate_state"),
+  gateOpen: (address: string) => invoke<GateState>("gate_open", { address }),
+  gateReset: () => invoke<GateState>("gate_reset"),
   securitySet: (strict: boolean) => call<boolean>("security_set", { strict }),
   login: (username: string, password: string) =>
     call<{ user: User }>("api_login", { username, password }),
@@ -167,8 +193,8 @@ export const api = {
 
   clearCache: () => invoke<void>("cache_clear"),
   netDiag: () => invoke<Record<string, unknown>>("net_diag"),
-  postLike: (id: number, on: boolean) => invoke<unknown>("api_post_like", { id, on }),
-  postCollect: (id: number, on: boolean) => invoke<unknown>("api_post_collect", { id, on }),
+  postLike: (id: number, on: boolean) => call<unknown>("api_post_like", { id, on }),
+  postCollect: (id: number, on: boolean) => call<unknown>("api_post_collect", { id, on }),
   postComments: (id: number, page: number, size: number) => call<CommentPage>("api_post_comments", { id, page, size }),
   postCategories: () => call<{ items: PostCategory[] }>("api_post_categories"),
   postCategory: (route: string, page = 1, size = 20) =>

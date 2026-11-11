@@ -185,3 +185,20 @@ export type User = {
     like_video_episodes: { video_id: number; ep: number }[];
   };
 };
+
+/** 门牌 / 数据源状态：Rust `infra::source::GateState` 的镜像。 */
+export type GateState = {
+  base: string;
+  adapter: string;
+  activated: boolean;
+};
+
+/** `app_boot` / `gate_*` 的启动响应。 */
+export type BootInfo = {
+  user: User | null;
+  logged_in: boolean;
+  base: string;
+  gate?: GateState;
+  strict_security?: boolean;
+  cli_relaxed?: boolean;
+};

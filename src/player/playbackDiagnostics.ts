@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useSyncExternalStore, type RefObject } from "react";
 import Hls from "hls.js";
 import type { FragBufferedData, FragLoadedData, FragLoadingData } from "hls.js";
-import { copyText } from "./clipboard";
+import { copyText } from "../clipboard";
 
 type Data = Record<string, unknown>;
 type Status = { enabled: boolean; path: string | null; error: string | null };

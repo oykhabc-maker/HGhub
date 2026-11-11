@@ -29,6 +29,13 @@ try {
     Object.assign(window, {
       mobileLayoutFixture: fixture,
       __TAURI_INTERNALS__: { invoke(cmd, args = {}) {
+        if (cmd === "gate_state") return Promise.resolve({ base: "https://fixture.invalid", adapter: "edge_v1", activated: true });
+        if (cmd === "data_call") {
+          const command = args.command || {};
+          const map = { boot: "app_boot", feed: "api_feed", category: "api_category", posts: "api_posts", search_hot: "api_search_hot", play: "api_play" };
+          cmd = map[command.cmd] || command.cmd;
+          args = { ...command }; delete args.cmd;
+        }
         fixture.calls.push({ cmd, args });
         if (cmd === "app_boot") return Promise.resolve({ user: null, logged_in: false, base: "https://fixture.invalid", strict_security: true });
         if (cmd === "playback_log_status") return Promise.resolve({ enabled: false, path: null, error: null });

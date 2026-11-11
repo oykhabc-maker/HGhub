@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { api, hostOf, isMobile, type LineItem, type LineProbe, type LineState } from "../api";
-import { tracePlayback } from "../playbackDiagnostics";
+import { tracePlayback } from "../player/playbackDiagnostics";
 import { useStore } from "../store";
 import { Modal, Sheet } from "./ui";
 import { ICheck, IClose, IRefresh, ISettings } from "../icons";

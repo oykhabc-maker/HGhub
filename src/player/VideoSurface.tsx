@@ -1,9 +1,9 @@
 import { useEffect, useImperativeHandle, useRef, forwardRef, useState } from "react";
 import Hls from "hls.js";
 import { isLocalMedia, platform, playlist } from "../api";
-import { mediaErrorMessage } from "../mediaErrors";
-import { mediaHost, mediaResource, observeHls, usePlayerDiagnostics } from "../playbackDiagnostics";
-import { usePlaybackActivity } from "../usePlaybackActivity";
+import { mediaErrorMessage } from "./mediaErrors";
+import { mediaHost, mediaResource, observeHls, usePlayerDiagnostics } from "./playbackDiagnostics";
+import { usePlaybackActivity } from "./usePlaybackActivity";
 
 export type VideoHandle = {
   el: () => HTMLVideoElement | null;

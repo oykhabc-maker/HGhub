@@ -4,14 +4,14 @@ import { api, cover, fmt, fmtTime, isMobile, logLine, mediaUrl } from "../api";
 import type { Detail, Episode, Post, VideoCard } from "../types";
 import { useStore } from "../store";
 import { Avatar, Img, Sheet } from "./ui";
-import VideoSurface, { type VideoHandle } from "./VideoSurface";
-import PlayerControls from "./PlayerControls";
-import PlaybackLock from "./PlaybackLock";
+import VideoSurface, { type VideoHandle } from "../player/VideoSurface";
+import PlayerControls from "../player/PlayerControls";
+import PlaybackLock from "../player/PlaybackLock";
 import { ArticlePanel, CommentsPanel, EpisodesPanel } from "./Panels";
 import { RowCard } from "./cards";
 import { setBackHandler } from "../back";
 import { copyText } from "../clipboard";
-import { tracePlayback } from "../playbackDiagnostics";
+import { tracePlayback } from "../player/playbackDiagnostics";
 import {
   IBack, IBoltF, IChevR, IChevronDown, IChevronUp, IClose, ICommentF, ICompress, IExpand, IFileText, IHeart, IHeartF,
   ILink, IList, ILockF, IPauseF, IPlayF, ISearch, IStar, IStarF, IVertSwap, IVol, IVolMute,
