@@ -42,20 +42,35 @@ class MainActivity : TauriActivity() {
     // 電視版原生播放器：JS 給播放網址，原生 Activity 用 ExoPlayer 播
     webView.addJavascriptInterface(object {
       @JavascriptInterface
-      fun play(url: String) {
+      fun play(url: String, startMs: Int) {
         runOnUiThread {
           nativePlaybackActive = true
           startActivity(
             android.content.Intent(this@MainActivity, PlayerActivity::class.java)
               .putExtra("url", url)
+              .putExtra("startMs", startMs.toLong())
           )
         }
       }
       @JavascriptInterface
-      fun load(url: String, label: String?) {
-        runOnUiThread { PlayerActivity.current?.loadUrl(url, label) }
+      fun load(url: String, label: String?, startMs: Int) {
+        runOnUiThread { PlayerActivity.current?.loadUrl(url, label, startMs.toLong()) }
       }
+      /* 播完且前端確認「沒有下一集」時由 JS 呼叫 */
+      @JavascriptInterface
+      fun close() {
+        runOnUiThread { PlayerActivity.current?.finish() }
+      }
+      /* 前端查得到目前這台是不是原生播放器模式（Fire TV） */
+      @JavascriptInterface
+      fun active(): Boolean = PlayerActivity.current != null
     }, "HGPlayer")
+    /* 除錯用：`adb shell am start ... --ez forceNative true` 可在模擬器上
+       強制走原生播放器路徑，驗證切集/續播邏輯（不影響正式行為）。 */
+    webView.addJavascriptInterface(object {
+      @JavascriptInterface
+      fun forceNative(): Boolean = intent?.getBooleanExtra("forceNative", false) == true
+    }, "HGEnv")
     /* 原生播放器 → 前端：切集、之後的其他互動都走這裡 */
     TvBridge.send = { js -> runOnUiThread { webView.evaluateJavascript(js, null) } }
   }

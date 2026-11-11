@@ -31,6 +31,8 @@ type Props = {
   /** 换源后重新套用，避免切集时音量/倍速被浏览器重置 */
   volume?: number;
   rate?: number;
+  /** 續播起點（秒）：Fire TV 原生播放器用它跳到上次看到的位置 */
+  startAt?: number;
   onTime?: (t: number) => void;
   onDuration?: (d: number) => void;
   onSize?: (w: number, h: number) => void;
@@ -45,7 +47,7 @@ type Props = {
 
 /** 只负责「播」：hls.js + video 元素，控制条由外层渲染。 */
 const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
-  { src, poster, autoPlay = true, active = true, diagnosticContext = {}, muted = false, loop = false, fit = "contain", volume = 1, rate = 1,
+  { src, poster, autoPlay = true, active = true, diagnosticContext = {}, muted = false, loop = false, fit = "contain", volume = 1, rate = 1, startAt = 0,
     onTime, onDuration, onSize, onPlaying, onPause, onWaiting, onEnded, onError, onClick, className = "" },
   ref,
 ) {
@@ -103,8 +105,8 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
     if (tvOn() && nativePlayerAvailable()) {
       /* 原生播放器接不到 hg.localhost（Tauri 自定義協議），改走 loopback 代理 */
       const nativeUrl = url.startsWith(NATIVE_MEDIA_ORIGIN) ? url : url.replace(/^https?:\/\/[^/]+/, NATIVE_MEDIA_ORIGIN);
-      logLine(`[play] native url=${nativeUrl.slice(0, 90)}`);
-      nativePlayUrl(nativeUrl);
+      logLine(`[play] native url=${nativeUrl.slice(0, 90)} start=${startAt.toFixed(1)}s`);
+      nativePlayUrl(nativeUrl, startAt);
       setReady(true);
       return;
     }

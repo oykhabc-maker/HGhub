@@ -231,13 +231,12 @@ function ShellInner({ collapsed, theater }: { collapsed: boolean; theater: boole
 /* ============ 移动端（无壳） ============ */
 function MobileShell() {
   const { stack, fs, clean } = useStore();
-  /* 電視模式：頁籤列搬到最上方，遙控器一直按「上」就到得了分頁。
-     它佔版面高度（不是浮在內容上），所以內容不會被蓋住。 */
-  const tvBar = useTvMode() && !fs && !clean && stack.length === 0;
+  /* 電視模式：整個 App 不畫頁籤列（上下都不畫）。
+     切分頁靠遙控器數字鍵 1-4（首頁/搜索/分類/我的）與返回鍵，
+     播放畫面因此可以真正滿版。 */
   return (
     <div className="absolute inset-0 flex flex-col bg-canvas plat-android"
       style={{ "--sat": "max(env(safe-area-inset-top), 8px)", "--sab": "max(env(safe-area-inset-bottom), 6px)" } as React.CSSProperties}>
-      {tvBar && <TabBar placement="top" />}
       <div className="relative flex-1 min-h-0">
         <AppBody />
       </div>

@@ -273,8 +273,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setTab = useCallback((t: Tab) => { setTabRaw(t); setStack([]); }, []);
+  /* push 需要讀最新的觀看記錄（自動續播），但 setStack 的 updater 拿不到 p，
+     所以用 ref 保存最新一份 persist 狀態。 */
+  const pRef = useRef(p);
+  pRef.current = p;
   const push = useCallback((pg: PageInput) => {
-    setStack((s) => [...s, { ...pg, key: `p${++seq}` } as Page]);
+    let page = pg as Page;
+    /* 從列表（分類/搜尋/首頁…）點進來也要續播：只有歷史頁會自己帶 startTime，
+       其餘入口在這裡統一補上，來源是觀看記錄（記住集數與秒數）。
+       片尾 10 秒內或沒有記錄就從頭播。 */
+    if (pg.kind === "feed" && pg.startTime === undefined && pg.videoIds.length) {
+      const id = pg.videoIds[Math.max(0, Math.min(pg.videoIds.length - 1, pg.index))];
+      const h = pRef.current.history.find((x) => x.id === id);
+      if (h && h.t > 3 && (!h.dur || h.t < h.dur - 10)) {
+        page = { ...pg, startEp: h.ep || 1, startTime: h.t } as Page;
+      }
+    }
+    setStack((s) => [...s, { ...page, key: `p${++seq}` } as Page]);
   }, []);
   const pop = useCallback(() => setStack((s) => s.slice(0, -1)), []);
 

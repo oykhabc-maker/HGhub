@@ -25,7 +25,11 @@ const subs = new Set<(v: boolean) => void>();
 function autoDetect(): boolean {
   if (!isAndroid) return false;
   try {
-    if (!/Mobile/i.test(navigator.userAgent)) return true;
+    const ua = navigator.userAgent;
+    /* Fire TV 的 UA 帶 "Mobile"，光看 Mobile 會誤判成手機；
+       認得裝置系列名比較可靠。 */
+    if (/AFT[A-Z]|AmazonWebView|Amazon ?Fire|BRAVIA|Google ?TV|Android ?TV/i.test(ua)) return true;
+    if (!/Mobile/i.test(ua)) return true;
     const w = Math.max(window.screen?.width || 0, window.screen?.height || 0);
     return w >= 900;
   } catch {

@@ -9,7 +9,7 @@ import PlayerControls from "./PlayerControls";
 import PlaybackLock from "./PlaybackLock";
 import { ArticlePanel, CommentsPanel, EpisodesPanel } from "./Panels";
 import { setBackHandler } from "../back";
-import { setNativeLabel } from "../tv/bridge";
+import { nativeClose, setNativeLabel } from "../tv/bridge";
 import { tracePlayback } from "../playbackDiagnostics";
 import {
   IBack, IBoltF, IChevR, IChevronDown, IChevronUp, IClose, ICommentF, ICompress, IExpand, IFileText, IHeart, IHeartF,
@@ -234,6 +234,8 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
     const next = Math.max(0, Math.min(videoIds.length - 1, index + delta));
     el.scrollTo({ top: next * el.clientHeight, behavior: "smooth" });
   }, [index, videoIds.length]);
+  const goRef = useRef(go);
+  goRef.current = go;
 
   /* 统一的上下切换：swipeEp 开启且为多集视频时优先切集，否则切剧。
      桌面端键盘 ↑↓ 与右侧按钮都走这里，和移动端上下划手势保持一致。 */
@@ -251,15 +253,76 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
     go(dir);
   }, [swipeEp, kind, epMap, curId, episodes.length, go]);
 
-  /* 原生播放器（Fire TV）的上下鍵：由前端算下一集，原生端只負責回報按鍵 */
+  /* 原生播放器（Fire TV）的每秒回報：位置/總長/是否在播。
+     電視上播放由原生 ExoPlayer 負責，WebView 的 <video> 根本沒載入，
+     所以「進度」「續播」必須靠這條回報，否則觀看記錄永遠是 0。 */
+  const durRef = useRef(duration);
+  durRef.current = duration;
+  const saveNativeProgress = (id: number, ep: number, t: number, d: number) => {
+    if (!id) return;
+    liveRef.current = { id, ep, dur: d || liveRef.current.dur, t };
+    const now = Date.now();
+    if (d > 0 && now - lastSaveRef.current > 5000) {
+      lastSaveRef.current = now;
+      addHistory(id, ep, t, d);
+    }
+  };
+
+  /* 原生播放器（Fire TV）的上下鍵：由前端算下一集，原生端只負責回報按鍵。
+     電視上不論「上下划切集」開關為何，一律先切集 —— 遙控器上下鍵在播放器裡
+     就是要換集；按了沒反應才是 bug（tv30「播到後面按不下去」）。
+     沒有下一集才退回切上一/下一部劇。 */
+  const navRef = useRef({ id: curId, ep: curEp, total: episodes.length, episodes, kind });
+  navRef.current = { id: curId, ep: curEp, total: episodes.length, episodes, kind };
+
   useEffect(() => {
-    const w = window as unknown as { __hgEpStep?: (dir: number) => void };
-    w.__hgEpStep = (dir: number) => {
-      logLine(`[ep] native step dir=${dir} cur=${curEp}/${episodes.length}`);
-      stepDir(dir > 0 ? 1 : -1);
+    const w = window as unknown as {
+      __hgEpStep?: (dir: number) => void;
+      __hgNativeTick?: (posMs: number, durMs: number, playing: number) => void;
+      __hgNativeEnded?: () => void;
     };
-    return () => { delete w.__hgEpStep; };
-  }, [stepDir, curEp, episodes.length]);
+    w.__hgEpStep = (dir: number) => {
+      const { id, ep, total } = navRef.current;
+      const want = dir > 0 ? (total === 0 || ep < total ? ep + 1 : 0) : (ep > 1 ? ep - 1 : 0);
+      logLine(`[ep] native step dir=${dir} cur=${ep}/${total} -> ${want || "video"}`);
+      if (want) {
+        setEpMap((m) => ({ ...m, [id]: want }));
+        setPanel(null);
+        return;
+      }
+      goRef.current(dir > 0 ? 1 : -1);
+    };
+    w.__hgNativeTick = (posMs: number, durMs: number, playing: number) => {
+      const t = Math.max(0, (Number(posMs) || 0) / 1000);
+      const d = Math.max(0, (Number(durMs) || 0) / 1000);
+      const { id, ep } = navRef.current;
+      if (d > 0 && Math.abs(d - durRef.current) > 0.4) setDuration(d);
+      setTime(t);
+      setPaused(playing === 0);
+      /* 原生端已經自己跳到續播位置，這條記錄不用再 seek */
+      const r = resumeRef.current;
+      if (r && r.key === `${id}:${ep}`) resumeRef.current = null;
+      saveNativeProgress(id, ep, t, d);
+    };
+    w.__hgNativeEnded = () => {
+      const { id, ep, episodes: eps } = navRef.current;
+      const next = eps.find((e) => e.ep_num === ep + 1);
+      logLine(`[ep] native ended id=${id} ep=${ep} next=${next ? next.ep_num : "-"}`);
+      if (next) {
+        setEpMap((m) => ({ ...m, [id]: next.ep_num }));
+        setPanel(null);
+        return;
+      }
+      /* 沒有下一集：請原生端關掉播放器（會回到列表），不要卡在片尾 */
+      if (!nativeClose()) logLine("[ep] native close unavailable");
+    };
+    return () => {
+      delete w.__hgEpStep;
+      delete w.__hgNativeTick;
+      delete w.__hgNativeEnded;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     setNativeLabel(`第 ${curEp} 集${episodes.length ? ` / ${episodes.length}` : ""}`);
@@ -789,6 +852,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
                   transition: zoom.g ? "none" : "transform .18s ease-out",
                 }}>
                 <VideoSurface ref={videoRef} src={playUrl} poster={posterUrl} autoPlay active={active} muted={muted}
+                  startAt={resumeRef.current && resumeRef.current.key === playKey ? resumeRef.current.t : 0}
                   diagnosticContext={{ active, view: mode, kind, video_id: curId, episode: curEp }}
                   volume={volume} rate={effRate}
                   fit={isDesktop ? "contain" : landscapeVideo ? (fs || vpLandscape ? "contain" : portraitFit) : (vpLandscape ? "contain" : "cover")}
