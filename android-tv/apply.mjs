@@ -82,7 +82,11 @@ if (!manifest.includes("networkSecurityConfig")) {
 }
 if (manifest !== fs.readFileSync(manifestPath, "utf8")) fs.writeFileSync(manifestPath, manifest);
 
-// 3c) Gradle：Media3 依賴
+// 4) applicationId：與官方版並存，避免簽章不同蓋不過去
+const gradlePath = path.join(gen, "app/build.gradle.kts");
+let gradle = fs.readFileSync(gradlePath, "utf8");
+
+// 3c) Gradle：Media3 依賴（原生播放器；必須放在 gradle/gradlePath 宣告之後）
 if (!gradle.includes("media3")) {
   gradle = gradle.replace(
     'implementation("androidx.webkit:webkit:1.14.0")',
@@ -92,9 +96,6 @@ if (!gradle.includes("media3")) {
   log("build.gradle.kts 已加入 Media3 依賴");
 }
 
-// 4) applicationId：與官方版並存，避免簽章不同蓋不過去
-const gradlePath = path.join(gen, "app/build.gradle.kts");
-let gradle = fs.readFileSync(gradlePath, "utf8");
 const APP_ID = "com.oykh.hghubtv";
 if (!gradle.includes(`applicationId = "${APP_ID}"`)) {
   if (/applicationId\s*=\s*"[^"]+"/.test(gradle)) {
