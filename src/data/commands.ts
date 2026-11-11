@@ -5,7 +5,7 @@ export const commands = {
   boot: (): DataCommand => ({ cmd: "boot" }),
   login: (username: string, password: string): DataCommand => ({ cmd: "login", username, password }),
   register: (username: string, password: string, email = ""): DataCommand => ({
-    cmd: "register", username, password, confirm_password, email,
+    cmd: "register", username, password, confirm_password: password, email,
   }),
   logout: (): DataCommand => ({ cmd: "logout" }),
   me: (): DataCommand => ({ cmd: "me" }),
