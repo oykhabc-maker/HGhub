@@ -1,9 +1,7 @@
 import { useEffect, useImperativeHandle, useRef, forwardRef, useState } from "react";
-import Hls from "hls.js";
-import { isLocalMedia, platform, playlist } from "../api";
-import { mediaErrorMessage } from "./mediaErrors";
-import { mediaHost, mediaResource, observeHls, usePlayerDiagnostics } from "./playbackDiagnostics";
-import { usePlaybackActivity } from "./usePlaybackActivity";
+import type Hls from "hls.js";
+import { mediaErrorMessage, mediaResource, usePlaybackActivity, usePlayerDiagnostics } from "./diagnostics";
+import { createPlaybackEngine, type PlaybackEngine } from "./engine";
 
 export type VideoHandle = {
   el: () => HTMLVideoElement | null;
@@ -49,8 +47,7 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
 ) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
-  const recoverCountRef = useRef(0);
-  const recoverTimerRef = useRef<number | null>(null);
+  const engineRef = useRef<PlaybackEngine | null>(null);
   const nearEndFiredRef = useRef(false);
   const [ready, setReady] = useState(false);
   const { trace, requestSeek } = usePlayerDiagnostics(videoRef, hlsRef, { ...diagnosticContext, active, resource: mediaResource(src) });
@@ -80,7 +77,7 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
       const dur = v.duration && Number.isFinite(v.duration) ? v.duration : 0;
       const target = dur > 0 ? Math.max(0, Math.min(dur - 0.15, t)) : Math.max(0, t);
       requestSeek(target, source);
-      if (hlsRef.current) { try { hlsRef.current.startLoad(target); } catch { /* ignore */ } }
+      engineRef.current?.seek(target);
       const resume = !v.paused;
       try { v.currentTime = target; trace("seek.assigned", { target, source }); }
       catch (e) { trace("seek.rejected", { error_name: (e as Error).name }); throw e; }
@@ -97,15 +94,8 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
     if (!video || !src) return;
     setReady(false);
     nearEndFiredRef.current = false;
-    recoverCountRef.current = 0;
     const onVideoResize = () => reportSize(video);
     video.addEventListener("resize", onVideoResize);
-    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
-
-    const proxied = isLocalMedia(src);
-    const url = proxied ? src : playlist(src);
-    const useHls = !url.includes("/seg?u=");
-    trace("source.load", { engine: useHls && Hls.isSupported() ? "hls.js" : "native", auto_play: autoPlay, resource: mediaResource(src), host: mediaHost(src) });
 
     /* 换源时先把音量/倍速套回去：hls 重新 attach 后浏览器会把它们重置成默认值 */
     const applySettings = () => {
@@ -115,79 +105,26 @@ const VideoSurface = forwardRef<VideoHandle, Props>(function VideoSurface(
       v.muted = muted;
       v.playbackRate = rate;
     };
-    applySettings();
 
-    if (useHls && Hls.isSupported()) {
-      const hls = new Hls({
-        // 禁用从插播/内容引导 JSON 派生直连 URL 的可选功能。
-        interstitialsController: undefined,
-        contentSteeringController: undefined,
-        enableInterstitialPlayback: false,
-        // WKWebView 里 hls.js 的 worker 不稳，iOS 关掉
-        enableWorker: platform !== "ios",
-        // Prefer standard MSE on macOS; hls.js handles MMS-only fallback and seek recovery.
-        preferManagedMediaSource: false,
-        autoStartLoad: false,
-        maxBufferLength: 30,
-        maxMaxBufferLength: 60,
-        backBufferLength: 30,
-        maxBufferHole: 0.5,
-        nudgeOffset: 0.25,
-        nudgeMaxRetry: 6,
-        manifestLoadingTimeOut: 20000,
-        manifestLoadingMaxRetry: 4,
-        fragLoadingTimeOut: 25000,
-        fragLoadingMaxRetry: 6,
-        fragLoadingRetryDelay: 400,
-      });
-      hlsRef.current = hls;
-      observeHls(hls, trace);
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (activity.isActive()) hls.startLoad();
-        if (autoPlay) activity.play("manifest_autoplay", true);
-      });
-      hls.on(Hls.Events.FRAG_BUFFERED, () => { recoverCountRef.current = 0; });
-      hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (!data.fatal) {
-          if (
-            data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR ||
-            data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR
-          ) {
-            try { hls.startLoad(video.currentTime || -1); } catch { /* ignore */ }
-          }
-          return;
-        }
-        if (!activity.isActive()) return;
-        const retry = () => {
-          recoverCountRef.current += 1;
-          const delay = 250 * recoverCountRef.current;
-          if (recoverTimerRef.current) window.clearTimeout(recoverTimerRef.current);
-          recoverTimerRef.current = window.setTimeout(() => {
-            try {
-              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad(video.currentTime || -1);
-              else hls.recoverMediaError();
-            } catch { /* ignore */ }
-          }, delay);
-        };
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && recoverCountRef.current < 4) { retry(); return; }
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoverCountRef.current < 4) { retry(); return; }
-        onError?.(`${data.type}/${data.details}`);
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-        else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-        else { hls.destroy(); hlsRef.current = null; }
-      });
-    } else {
-      video.src = url;
-      if (autoPlay) activity.play("native_autoplay", true);
-    }
+    const engine = createPlaybackEngine({
+      video,
+      src,
+      autoPlay,
+      trace,
+      isActive: activity.isActive,
+      play: activity.play,
+      applySettings,
+      onError: (detail) => onError?.(detail),
+    });
+    engineRef.current = engine;
+    const engineHls = engine.hls;
+    hlsRef.current = engineHls;
 
     return () => {
       video.removeEventListener("resize", onVideoResize);
-      if (recoverTimerRef.current) { window.clearTimeout(recoverTimerRef.current); recoverTimerRef.current = null; }
-      trace("source.cleanup");
-      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+      engine.destroy();
+      if (engineRef.current === engine) engineRef.current = null;
+      if (hlsRef.current === engineHls) hlsRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src]);

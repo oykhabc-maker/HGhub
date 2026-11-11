@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { tracePlayback } from "./player/playbackDiagnostics";
+import { tracePlayback } from "./player/diagnostics";
 import { dataCall, type DataCommand } from "./data/client";
 import type {
   BootInfo, CommentPage, Detail, GateState, HotWord, Paged, PlayInfo, Post, PostCategory, RankItem, TagGroup, TopicCard, TopicDetail, User, UserProfile, VideoCard,

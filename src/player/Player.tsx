@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import Hls from "hls.js";
-import { fmtTime, platform, playlist } from "../api";
-import { mediaErrorMessage } from "./mediaErrors";
-import { mediaHost, mediaResource, observeHls, usePlayerDiagnostics } from "./playbackDiagnostics";
-import { usePlaybackActivity } from "./usePlaybackActivity";
-import { useSeekInput } from "./useSeekInput";
+import type Hls from "hls.js";
+import { fmtTime } from "../api";
+import { createPlaybackEngine, type PlaybackEngine } from "./engine";
+import {
+  mediaErrorMessage, mediaResource, usePlaybackActivity, usePlayerDiagnostics, useSeekInput,
+} from "./diagnostics";
 import PlaybackLock from "./PlaybackLock";
 import { ICompress, IExpand, ILockF, IPauseF, IPlayF, IVol, IVolMute } from "../icons";
 
@@ -31,7 +31,7 @@ export default function Player({
   const videoRef = useRef<HTMLVideoElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
-  const recoverCountRef = useRef(0);
+  const engineRef = useRef<PlaybackEngine | null>(null);
   const { trace, requestSeek } = usePlayerDiagnostics(videoRef, hlsRef, { view: "post_detail", ...diagnosticContext, active, resource: mediaResource(src) });
   const activity = usePlaybackActivity(videoRef, hlsRef, { active, autoPlay: !!autoPlay, src, trace });
   const [playing, setPlaying] = useState(false);
@@ -49,10 +49,7 @@ export default function Player({
       if (!video || !activity.isActive()) return;
       requestSeek(target, `legacy_${input}`);
       setWaiting(true);
-      if (hlsRef.current) {
-        try { hlsRef.current.startLoad(target); } catch { /* ignore */ }
-      }
-      video.currentTime = target;
+      engineRef.current?.seek(target);
       trace("seek.assigned", { target });
       setTime(video.currentTime);
     },
@@ -63,86 +60,26 @@ export default function Player({
     if (!video || !src) return;
     setErrMsg("");
     setWaiting(false);
-    recoverCountRef.current = 0;
-    const url = playlist(src);
-    trace("source.load", { engine: Hls.isSupported() ? "hls.js" : "native", auto_play: autoPlay, resource: mediaResource(src), host: mediaHost(src) });
-
-    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
-
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        // 禁用从插播/内容引导 JSON 派生直连 URL 的可选功能。
-        interstitialsController: undefined,
-        contentSteeringController: undefined,
-        enableInterstitialPlayback: false,
-        // WKWebView 里 hls.js 的 worker 不稳，iOS 关掉
-        enableWorker: platform !== "ios",
-        // Keep the same macOS seek workaround as the shared player.
-        preferManagedMediaSource: false,
-        autoStartLoad: false,
-        lowLatencyMode: false,
-        maxBufferLength: 30,
-        maxMaxBufferLength: 60,
-        backBufferLength: 30,
-        maxBufferHole: 0.5,
-        nudgeOffset: 0.25,
-        nudgeMaxRetry: 6,
-        manifestLoadingTimeOut: 20000,
-        manifestLoadingMaxRetry: 4,
-        fragLoadingTimeOut: 25000,
-        fragLoadingMaxRetry: 6,
-        fragLoadingRetryDelay: 400,
-      });
-      hlsRef.current = hls;
-      observeHls(hls, trace);
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (activity.isActive()) hls.startLoad();
-        if (autoPlay) activity.play("manifest_autoplay", true);
-      });
-      hls.on(Hls.Events.FRAG_BUFFERED, () => {
-        recoverCountRef.current = 0;
-        setErrMsg("");
-      });
-      hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (!data.fatal) {
-          if (
-            data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR ||
-            data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR
-          ) {
-            try { hls.startLoad(video.currentTime || -1); } catch { /* ignore */ }
-          }
-          return;
-        }
-        if (!activity.isActive()) return;
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && recoverCountRef.current < 4) {
-          recoverCountRef.current += 1;
-          try { hls.startLoad(video.currentTime || -1); } catch { /* ignore */ }
-          return;
-        }
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoverCountRef.current < 4) {
-          recoverCountRef.current += 1;
-          try { hls.recoverMediaError(); video.play().catch(() => {}); } catch { /* ignore */ }
-          return;
-        }
-        const detail = `${data.type}/${data.details}/${data.response?.code ?? ""}/${String(data.reason ?? "").slice(0, 80)}`;
+    const engine = createPlaybackEngine({
+      video,
+      src,
+      autoPlay: !!autoPlay,
+      trace,
+      isActive: activity.isActive,
+      play: activity.play,
+      onBuffered: () => setErrMsg(""),
+      onError: (detail) => {
         (window as unknown as { __hlsErr?: string }).__hlsErr = detail;
         setErrMsg(detail);
-        if (!activity.isActive()) return;
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-        else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-        else { hls.destroy(); hlsRef.current = null; }
-      });
-    } else {
-      // Safari / 部分 WebView 原生支持 HLS
-      video.src = url;
-      if (autoPlay) activity.play("native_autoplay", true);
-    }
-
+      },
+    });
+    engineRef.current = engine;
+    const engineHls = engine.hls;
+    hlsRef.current = engineHls;
     return () => {
-      trace("source.cleanup");
-      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+      engine.destroy();
+      if (engineRef.current === engine) engineRef.current = null;
+      if (hlsRef.current === engineHls) hlsRef.current = null;
     };
   }, [src, autoPlay]);
 

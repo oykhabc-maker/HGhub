@@ -17,7 +17,7 @@ import SourceGate from "./components/SourceGate";
 import { ToastHost } from "./components/ui";
 import { DesktopRail, DesktopTitleBar } from "./components/DesktopChrome";
 import ResizeHandles from "./components/ResizeHandles";
-import { tracePlayback } from "./player/playbackDiagnostics";
+import { tracePlayback } from "./player/diagnostics";
 import { IGrid, IGridF, IHome, IHomeF, ISearch, IUser, IUserF, Logo } from "./icons";
 
 /* ============ 底部标签栏（移动端）—— iOS 26 液态玻璃悬浮胶囊 ============ */

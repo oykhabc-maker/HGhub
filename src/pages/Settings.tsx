@@ -4,7 +4,7 @@ import { APP_NAME } from "../branding";
 import { useStore } from "../store";
 import { Modal, Toggle } from "../components/ui";
 import GateDialog from "../components/GateDialog";
-import { copyPlaybackLog, initPlaybackLog, setPlaybackLog, tracePlayback, usePlaybackLog } from "../player/playbackDiagnostics";
+import { copyPlaybackLog, initPlaybackLog, setPlaybackLog, tracePlayback, usePlaybackLog } from "../player/diagnostics";
 import { formatNetDiag, shortVerdict } from "../netDiagReport";
 import { copyText } from "../clipboard";
 import { IBack, IBoltF, IBroom, IChevR, IHeart, IInfo, ILink, ILockF, IMoon, IRefresh, ISettings, ISun, IVolMute, IList, Logo } from "../icons";

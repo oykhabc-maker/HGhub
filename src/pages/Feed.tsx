@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { api, cover, fmt, fmtTime, isMobile, logLine, mediaUrl } from "../api";
+import { api, cover, fmt, fmtTime, isMobile, logLine } from "../api";
 import type { Detail, Episode, Post, VideoCard } from "../types";
 import { useStore } from "../store";
 import { Avatar, Img, Sheet } from "../components/ui";
@@ -11,7 +11,10 @@ import { ArticlePanel, CommentsPanel, EpisodesPanel } from "../components/Panels
 import { RowCard } from "../components/cards";
 import { setBackHandler } from "../back";
 import { copyText } from "../clipboard";
-import { tracePlayback } from "../player/playbackDiagnostics";
+import { tracePlayback } from "../player/diagnostics";
+import {
+  episodeKey, nextEpisodeNumber, previousEpisodeNumber, resumePosition, selectPlaybackUrl, toPlaybackSource, type PlaybackSource,
+} from "../player/session";
 import {
   IBack, IBoltF, IChevR, IChevronDown, IChevronUp, IClose, ICommentF, ICompress, IExpand, IFileText, IHeart, IHeartF,
   ILink, IList, ILockF, IPauseF, IPlayF, ISearch, IStar, IStarF, IVertSwap, IVol, IVolMute,
@@ -46,8 +49,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
   const [index, setIndex] = useState(startIndex);
   const [epMap, setEpMap] = useState<Record<number, number>>(() => (startEp ? { [videoIds[startIndex]]: startEp } : {}));
   const [details, setDetails] = useState<Record<number, Detail>>({});
-  const [playUrls, setPlayUrls] = useState<Record<string, string>>({});
-  const [hevcUrls, setHevcUrls] = useState<Record<string, string>>({});
+  const [sources, setSources] = useState<Record<string, PlaybackSource>>({});
   const [cards, setCards] = useState<Record<number, VideoCard>>({});
   const [posts, setPosts] = useState<Record<number, Post>>({});
   const [related, setRelated] = useState<VideoCard[]>([]);
@@ -65,7 +67,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
   const [descOpen, setDescOpen] = useState(false);
   /* 续播：拿到时长后再 seek 一次（只对进入时那一条生效） */
   const resumeRef = useRef<{ key: string; t: number } | null>(
-    startTime && startTime > 1 ? { key: `${videoIds[startIndex]}:${startEp || 1}`, t: startTime } : null,
+    startTime && startTime > 1 ? { key: episodeKey(videoIds[startIndex], startEp || 1), t: startTime } : null,
   );
   /* 观看进度：onTime 里节流写回 store，卸载时再兜一次 */
   const liveRef = useRef({ id: 0, ep: 1, dur: 0, t: 0 });
@@ -129,10 +131,10 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
   const curId = videoIds[index];
   const detail = details[curId];
   const curEp = epMap[curId] || 1;
-  const playKey = `${curId}:${curEp}`;
-  const mainUrl = playUrls[playKey] || "";
-  const hevcUrl = hevcUrls[playKey] || "";
-  const playUrl = preferHevc && hevcUrl ? hevcUrl : mainUrl;
+  const playKey = episodeKey(curId, curEp);
+  const source = sources[playKey];
+  const hevcUrl = source?.hevcUrl || "";
+  const playUrl = selectPlaybackUrl(source, preferHevc);
   useEffect(() => { setZoom({ s: 1, x: 0, y: 0, g: false }); pinchRef.current = null; pointersRef.current.clear(); }, [playUrl]);
   useEffect(() => { videoRef.current?.trace("page.active", { active, view: mode, video_id: curId, episode: curEp }); }, [active, mode, curId, curEp]);
   const episodes = detail?.episodes || [];
@@ -154,10 +156,11 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
     setDuration(d);
     liveRef.current = { ...liveRef.current, dur: d };
     const r = resumeRef.current;
-    if (r && r.key === playKey && r.t > 1 && (!d || r.t < d - 3)) {
+    const target = resumePosition(r?.t, d);
+    if (r && r.key === playKey && target != null) {
       resumeRef.current = null;
-      videoRef.current?.seek(r.t, "history_resume");
-      setTime(r.t);
+      videoRef.current?.seek(target, "history_resume");
+      setTime(target);
     }
   };
 
@@ -330,13 +333,13 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
   /* 拉播放地址 */
   useEffect(() => {
     if (!curId) return;
-    if (playUrls[playKey]) return;
+    if (sources[playKey]) return;
     let alive = true;
     api.play(curId, curEp)
       .then((info) => {
         if (!alive) return;
-        const streamUrl = info?.streams?.main || info?.video_url;
-        const hevcStream = info?.streams?.hevc || info?.video_url_hevc || "";
+        const nextSource = toPlaybackSource(info);
+        const streamUrl = nextSource?.mainUrl || "";
         // 接口本身成功但业务失败（status=0 / streams 为空）时不会进 call() 的 catch，
         // 这里把原始 status/msg 落进 debug.log ——「暂无播放地址」的唯一现场证据。
         // src 才是真正喂给播放器的值；video_url 是新接口不再返回的旧字段，别拿它判断成败。
@@ -354,9 +357,8 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
           video_id: curId, episode: curEp, resolved: !!streamUrl, kind, host,
           status: raw.status ?? null, msg: String(raw.msg ?? "") || null,
         });
-        if (!streamUrl) throw new Error("暂无播放地址");
-        setPlayUrls((m) => ({ ...m, [playKey]: streamUrl }));
-        if (hevcStream) setHevcUrls((m) => ({ ...m, [playKey]: hevcStream }));
+        if (!nextSource) throw new Error("暂无播放地址");
+        setSources((m) => ({ ...m, [playKey]: nextSource }));
         addHistory(curId, curEp);
       })
       .catch((e) => { if (alive) setErr((e as Error).message || "取播放地址失败"); });
@@ -368,19 +370,18 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
   useEffect(() => {
     if (!curId || kind !== "video") return;
     const ep = epMap[curId] || 1;
-    const total = episodes.length;
     const want: number[] = [];
-    if (ep > 1) want.push(ep - 1);
-    if (total === 0 || ep < total) want.push(ep + 1);
+    const prev = previousEpisodeNumber(episodes, ep);
+    const next = nextEpisodeNumber(episodes, ep);
+    if (prev != null) want.push(prev);
+    if (next != null) want.push(next);
     for (const e of want) {
-      const k = `${curId}:${e}`;
-      if (playUrls[k]) continue;
+      const k = episodeKey(curId, e);
+      if (sources[k]) continue;
       api.play(curId, e)
         .then((info) => {
-          const u = info?.streams?.main || info?.video_url;
-          const h = info?.streams?.hevc || info?.video_url_hevc || "";
-          if (u) setPlayUrls((m) => ({ ...m, [k]: u }));
-          if (h) setHevcUrls((m) => ({ ...m, [k]: h }));
+          const nextSource = toPlaybackSource(info);
+          if (nextSource) setSources((m) => ({ ...m, [k]: nextSource }));
         })
         .catch(() => { /* 预热失败不影响当前播放 */ });
     }
